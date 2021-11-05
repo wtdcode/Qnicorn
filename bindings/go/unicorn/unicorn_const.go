@@ -1,5 +1,5 @@
 package unicorn
-// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [unicorn_const.go]
+// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [unicorn_const.go]
 const (
 	API_MAJOR = 2
 

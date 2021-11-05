@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [arm_const.py]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [arm_const.py]
 
 # ARM CPU
 

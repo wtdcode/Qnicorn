@@ -10,7 +10,7 @@ include = [ 'arm.h', 'arm64.h', 'mips.h', 'x86.h', 'sparc.h', 'm68k.h', 'ppc.h',
 
 template = {
     'python': {
-            'header': "# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [%s_const.py]\n",
+            'header': "# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [%s_const.py]\n",
             'footer': "",
             'line_format': 'UC_%s = %s\n',
             'out_file': './python/unicorn/%s_const.py',
@@ -28,7 +28,7 @@ template = {
             'comment_close': '',
         },
     'ruby': {
-            'header': "# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [%s_const.rb]\n\nmodule UnicornEngine\n",
+            'header': "# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [%s_const.rb]\n\nmodule UnicornEngine\n",
             'footer': "end",
             'line_format': '\tUC_%s = %s\n',
             'out_file': './ruby/unicorn_gem/lib/unicorn_engine/%s_const.rb',
@@ -46,7 +46,7 @@ template = {
             'comment_close': '',
         },
     'go': {
-            'header': "package unicorn\n// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [%s_const.go]\nconst (\n",
+            'header': "package unicorn\n// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [%s_const.go]\nconst (\n",
             'footer': ")",
             'line_format': '\t%s = %s\n',
             'out_file': './go/unicorn/%s_const.go',
@@ -64,7 +64,7 @@ template = {
             'comment_close': '',
         },
     'java': {
-            'header': "// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT\n\npackage unicorn;\n\npublic interface %sConst {\n",
+            'header': "// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT\n\npackage unicorn;\n\npublic interface %sConst {\n",
             'footer': "\n}\n",
             'line_format': '   public static final int UC_%s = %s;\n',
             'out_file': './java/unicorn/%sConst.java',
@@ -82,7 +82,7 @@ template = {
             'comment_close': '',
         },
     'dotnet': {
-            'header': "// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT\n\nnamespace UnicornManaged.Const\n\nopen System\n\n[<AutoOpen>]\nmodule %s =\n",
+            'header': "// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT\n\nnamespace UnicornManaged.Const\n\nopen System\n\n[<AutoOpen>]\nmodule %s =\n",
             'footer': "\n",
             'line_format': '    let UC_%s = %s\n',
             'out_file': os.path.join('dotnet', 'UnicornManaged', 'Const', '%s.fs'),
@@ -100,7 +100,7 @@ template = {
             'comment_close': '',
         },
     'pascal': {
-            'header': "// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT\n\nunit %sConst;\n\ninterface\n\nconst",
+            'header': "// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT\n\nunit %sConst;\n\ninterface\n\nconst",
             'footer': "\nimplementation\nend.",
             'line_format': '  UC_%s = %s;\n',
             'out_file': os.path.join('pascal', 'unicorn', '%sConst.pas'),

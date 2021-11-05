@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [sparc_const.py]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [sparc_const.py]
 
 # SPARC32 CPU
 

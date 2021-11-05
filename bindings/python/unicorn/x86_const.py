@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [x86_const.py]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [x86_const.py]
 
 # X86 CPU
 

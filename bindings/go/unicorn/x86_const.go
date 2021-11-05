@@ -1,5 +1,5 @@
 package unicorn
-// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [x86_const.go]
+// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [x86_const.go]
 const (
 
 // X86 CPU

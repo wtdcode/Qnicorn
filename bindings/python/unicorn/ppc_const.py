@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [ppc_const.py]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [ppc_const.py]
 
 # PPC CPU
 

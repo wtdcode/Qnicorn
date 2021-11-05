@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [arm64_const.rb]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [arm64_const.rb]
 
 module UnicornEngine
 

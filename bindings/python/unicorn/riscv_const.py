@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [riscv_const.py]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [riscv_const.py]
 
 # RISCV32 CPU
 

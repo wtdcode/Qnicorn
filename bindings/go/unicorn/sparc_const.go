@@ -1,5 +1,5 @@
 package unicorn
-// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [sparc_const.go]
+// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [sparc_const.go]
 const (
 
 // SPARC32 CPU

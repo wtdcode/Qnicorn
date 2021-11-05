@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [unicorn_const.rb]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [unicorn_const.rb]
 
 module UnicornEngine
 	UC_API_MAJOR = 2

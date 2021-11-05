@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [unicorn_const.py]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [unicorn_const.py]
 UC_API_MAJOR = 2
 
 UC_API_MINOR = 0

@@ -1,5 +1,5 @@
 package unicorn
-// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [arm64_const.go]
+// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [arm64_const.go]
 const (
 
 // ARM64 CPU

@@ -1,4 +1,4 @@
-# For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [mips_const.py]
+# For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [mips_const.py]
 
 # MIPS32 CPUS
 

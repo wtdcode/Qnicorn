@@ -1,5 +1,5 @@
 package unicorn
-// For Unicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [m68k_const.go]
+// For Qnicorn Engine. AUTO-GENERATED FILE, DO NOT EDIT [m68k_const.go]
 const (
 
 // M68K CPU
