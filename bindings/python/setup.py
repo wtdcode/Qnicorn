@@ -29,7 +29,7 @@ SRC_DIR = os.path.join(ROOT_DIR, 'src')
 UC_DIR = os.path.join(ROOT_DIR, '../..')
 BUILD_DIR = os.path.join(UC_DIR, 'build')
 
-VERSION = "2.0.0rc3"
+VERSION = "1.0.0"
 
 if SYSTEM == 'darwin':
     LIBRARY_FILE = "libunicorn.dylib"
@@ -226,20 +226,20 @@ Unicorn offers some unparalleled features:
 - Thread-safety by design
 - Distributed under free software license GPLv2
 
-Further information is available at http://www.unicorn-engine.org
+Further information is available at http://www.qnicorn.org
 '''
 
 setup(
-    provides=['unicorn'],
-    packages=['unicorn'],
-    name='unicorn',
+    provides=['qnicorn'],
+    packages=['qnicorn'],
+    name='qnicorn',
     version=VERSION,
-    author='Nguyen Anh Quynh',
-    author_email='aquynh@gmail.com',
-    description='Unicorn CPU emulator engine',
+    author='Lazymio',
+    author_email='mio@lazym.io',
+    description='Qnicorn Enmulation Engine',
     long_description=long_desc,
     long_description_content_type="text/markdown",
-    url='http://www.unicorn-engine.org',
+    url='http://www.qnicorn.org',
     classifiers=[
         'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 2',
