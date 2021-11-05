@@ -24,9 +24,9 @@
 
 #include "exec/exec-all.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
-bool set_preferred_target_page_bits(struct uc_struct *uc, int bits)
+bool set_preferred_target_page_bits(struct qc_struct *uc, int bits)
 {
     /*
      * The target page size is the lowest common denominator for all
@@ -56,7 +56,7 @@ bool set_preferred_target_page_bits(struct uc_struct *uc, int bits)
     return true;
 }
 
-void finalize_target_page_bits(struct uc_struct *uc)
+void finalize_target_page_bits(struct qc_struct *uc)
 {
 #ifdef TARGET_PAGE_BITS_VARY
     if (uc->init_target_page == NULL) {

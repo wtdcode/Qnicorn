@@ -24,7 +24,7 @@
 #include "sysemu/sysemu.h"
 #include "fpu/softfloat.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
 {
@@ -634,7 +634,7 @@ static void cpreg_hashtable_data_destroy(gpointer data)
     g_free(r);
 }
 
-void arm_cpu_initfn(struct uc_struct *uc, CPUState *obj)
+void arm_cpu_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
     CPUARMState *env = &cpu->env;
@@ -721,7 +721,7 @@ static void arm_cpu_finalize_features(ARMCPU *cpu)
 #endif
 }
 
-void arm_cpu_realizefn(struct uc_struct *uc, CPUState *dev)
+void arm_cpu_realizefn(struct qc_struct *uc, CPUState *dev)
 {
     CPUState *cs = CPU(dev);
     ARMCPU *cpu = ARM_CPU(dev);
@@ -1146,7 +1146,7 @@ void arm_cpu_realizefn(struct uc_struct *uc, CPUState *dev)
 /* CPU models. These are not needed for the AArch64 linux-user build. */
 #if !defined(TARGET_AARCH64)
 
-static void arm926_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm926_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1172,7 +1172,7 @@ static void arm926_initfn(struct uc_struct *uc, CPUState *obj)
     FIELD_DP32(cpu->isar.mvfr0, MVFR0, FPDP, 1, cpu->isar.mvfr0);
 }
 
-static void arm946_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm946_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1184,7 +1184,7 @@ static void arm946_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void arm1026_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm1026_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1223,7 +1223,7 @@ static void arm1026_initfn(struct uc_struct *uc, CPUState *obj)
     }
 }
 
-static void arm1136_r2_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm1136_r2_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
     /* What qemu calls "arm1136_r2" is actually the 1136 r0p2, ie an
@@ -1259,7 +1259,7 @@ static void arm1136_r2_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_auxcr = 7;
 }
 
-static void arm1136_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm1136_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1289,7 +1289,7 @@ static void arm1136_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_auxcr = 7;
 }
 
-static void arm1176_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm1176_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1320,7 +1320,7 @@ static void arm1176_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_auxcr = 7;
 }
 
-static void arm11mpcore_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm11mpcore_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1348,7 +1348,7 @@ static void arm11mpcore_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_auxcr = 1;
 }
 
-static void cortex_m0_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_m0_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
     set_feature(&cpu->env, ARM_FEATURE_V6);
@@ -1357,7 +1357,7 @@ static void cortex_m0_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->midr = 0x410cc200;
 }
 
-static void cortex_m3_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_m3_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
     set_feature(&cpu->env, ARM_FEATURE_V7);
@@ -1382,7 +1382,7 @@ static void cortex_m3_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->isar.id_isar6 = 0x00000000;
 }
 
-static void cortex_m4_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_m4_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1412,7 +1412,7 @@ static void cortex_m4_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->isar.id_isar6 = 0x00000000;
 }
 
-static void cortex_m7_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_m7_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1442,7 +1442,7 @@ static void cortex_m7_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->isar.id_isar6 = 0x00000000;
 }
 
-static void cortex_m33_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_m33_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1476,7 +1476,7 @@ static void cortex_m33_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->ctr = 0x8000c000;
 }
 
-static void arm_v7m_class_init(struct uc_struct *uc, CPUClass *oc, void *data)
+static void arm_v7m_class_init(struct qc_struct *uc, CPUClass *oc, void *data)
 {
     ARMCPUClass *acc = ARM_CPU_CLASS(oc);
     CPUClass *cc = CPU_CLASS(oc);
@@ -1498,7 +1498,7 @@ static ARMCPRegInfo cortexr5_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
-static void cortex_r5_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_r5_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1527,7 +1527,7 @@ static void cortex_r5_initfn(struct uc_struct *uc, CPUState *obj)
     define_arm_cp_regs(cpu, cortexr5_cp_reginfo);
 }
 
-static void cortex_r5f_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_r5f_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1544,7 +1544,7 @@ static const ARMCPRegInfo cortexa8_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
-static void cortex_a8_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_a8_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1610,7 +1610,7 @@ static const ARMCPRegInfo cortexa9_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
-static void cortex_a9_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_a9_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1672,7 +1672,7 @@ static ARMCPRegInfo cortexa15_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
-static void cortex_a7_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_a7_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1715,7 +1715,7 @@ static void cortex_a7_initfn(struct uc_struct *uc, CPUState *obj)
     define_arm_cp_regs(cpu, cortexa15_cp_reginfo); /* Same as A15 */
 }
 
-static void cortex_a15_initfn(struct uc_struct *uc, CPUState *obj)
+static void cortex_a15_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1755,7 +1755,7 @@ static void cortex_a15_initfn(struct uc_struct *uc, CPUState *obj)
     define_arm_cp_regs(cpu, cortexa15_cp_reginfo);
 }
 
-static void ti925t_initfn(struct uc_struct *uc, CPUState *obj)
+static void ti925t_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
     set_feature(&cpu->env, ARM_FEATURE_V4T);
@@ -1765,7 +1765,7 @@ static void ti925t_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000070;
 }
 
-static void sa1100_initfn(struct uc_struct *uc, CPUState *obj)
+static void sa1100_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1775,7 +1775,7 @@ static void sa1100_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000070;
 }
 
-static void sa1110_initfn(struct uc_struct *uc, CPUState *obj)
+static void sa1110_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
     set_feature(&cpu->env, ARM_FEATURE_STRONGARM);
@@ -1784,7 +1784,7 @@ static void sa1110_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000070;
 }
 
-static void pxa250_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa250_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1795,7 +1795,7 @@ static void pxa250_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa255_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa255_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1806,7 +1806,7 @@ static void pxa255_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa260_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa260_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1817,7 +1817,7 @@ static void pxa260_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa261_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa261_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1828,7 +1828,7 @@ static void pxa261_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa262_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa262_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1839,7 +1839,7 @@ static void pxa262_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa270a0_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa270a0_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1851,7 +1851,7 @@ static void pxa270a0_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa270a1_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa270a1_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1863,7 +1863,7 @@ static void pxa270a1_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa270b0_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa270b0_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1875,7 +1875,7 @@ static void pxa270b0_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa270b1_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa270b1_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1887,7 +1887,7 @@ static void pxa270b1_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa270c0_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa270c0_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1899,7 +1899,7 @@ static void pxa270c0_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->reset_sctlr = 0x00000078;
 }
 
-static void pxa270c5_initfn(struct uc_struct *uc, CPUState *obj)
+static void pxa270c5_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1917,7 +1917,7 @@ static void pxa270c5_initfn(struct uc_struct *uc, CPUState *obj)
  * The version of '-cpu max' for qemu-system-aarch64 is defined in cpu64.c;
  * this only needs to handle 32 bits.
  */
-static void arm_max_initfn(struct uc_struct *uc, CPUState *obj)
+static void arm_max_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -1934,8 +1934,8 @@ static void arm_max_initfn(struct uc_struct *uc, CPUState *obj)
 
 struct ARMCPUInfo {
     const char *name;
-    void (*initfn)(struct uc_struct *uc, CPUState *obj);
-    void (*class_init)(struct uc_struct *uc, CPUClass *oc, void *data);
+    void (*initfn)(struct qc_struct *uc, CPUState *obj);
+    void (*class_init)(struct qc_struct *uc, CPUClass *oc, void *data);
 };
 
 #if !defined(TARGET_AARCH64)
@@ -1982,7 +1982,7 @@ static struct ARMCPUInfo arm_cpus[] = {
 };
 #endif
 
-void arm_cpu_class_init(struct uc_struct *uc, CPUClass *oc)
+void arm_cpu_class_init(struct qc_struct *uc, CPUClass *oc)
 {
     ARMCPUClass *acc = ARM_CPU_CLASS(oc);
     CPUClass *cc = CPU_CLASS(acc);
@@ -2015,7 +2015,7 @@ static void arm_cpu_instance_init(CPUState *obj)
     arm_cpu_post_init(obj);
 }
 
-ARMCPU *cpu_arm_init(struct uc_struct *uc)
+ARMCPU *cpu_arm_init(struct qc_struct *uc)
 {
     ARMCPU *cpu;
     CPUState *cs;
@@ -2027,13 +2027,13 @@ ARMCPU *cpu_arm_init(struct uc_struct *uc)
     }
 
 #if !defined(TARGET_AARCH64)
-    if (uc->mode & UC_MODE_MCLASS) {
+    if (uc->mode & QC_MODE_MCLASS) {
         uc->cpu_model = 11;
-    } else if (uc->mode & UC_MODE_ARM926) {
+    } else if (uc->mode & QC_MODE_ARM926) {
         uc->cpu_model = 0;
-    } else if (uc->mode & UC_MODE_ARM946) {
+    } else if (uc->mode & QC_MODE_ARM946) {
         uc->cpu_model = 1;
-    } else if (uc->mode & UC_MODE_ARM1176) {
+    } else if (uc->mode & QC_MODE_ARM1176) {
         uc->cpu_model = 5;
     } else if (uc->cpu_model == INT_MAX) {
         uc->cpu_model = 17; // cortex-a15

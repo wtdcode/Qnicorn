@@ -14,10 +14,10 @@
 #ifndef EXEC_TARGET_PAGE_H
 #define EXEC_TARGET_PAGE_H
 
-struct uc_struct;
+struct qc_struct;
 
-size_t qemu_target_page_size(struct uc_struct *uc);
-int qemu_target_page_bits(struct uc_struct *uc);
+size_t qemu_target_page_size(struct qc_struct *uc);
+int qemu_target_page_bits(struct qc_struct *uc);
 int qemu_target_page_bits_min(void);
 
 #endif

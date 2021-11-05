@@ -128,7 +128,7 @@ typedef struct CPUClass {
     bool (*cpu_exec_interrupt)(CPUState *cpu, int interrupt_request);
 
     vaddr (*adjust_watchpoint_address)(CPUState *cpu, vaddr addr, int len);
-    void (*tcg_initialize)(struct uc_struct *uc);
+    void (*tcg_initialize)(struct qc_struct *uc);
 } CPUClass;
 
 /*
@@ -307,7 +307,7 @@ struct CPUState {
     uint32_t can_do_io;
     int32_t exception_index;
 
-    struct uc_struct* uc;
+    struct qc_struct* uc;
 
     /* pointer to CPUArchState.cc */
     struct CPUClass *cc;
@@ -604,10 +604,10 @@ void cpu_exec_unrealizefn(CPUState *cpu);
 bool target_words_bigendian(void);
 
 /* use original func name. */
-void cpu_class_init(struct uc_struct *uc, CPUClass *k);
-void cpu_common_initfn(struct uc_struct *uc, CPUState *cs);
+void cpu_class_init(struct qc_struct *uc, CPUClass *k);
+void cpu_common_initfn(struct qc_struct *uc, CPUState *cs);
 
-void cpu_stop(struct uc_struct *uc);
+void cpu_stop(struct qc_struct *uc);
 
 #define UNASSIGNED_CPU_INDEX -1
 #define UNASSIGNED_CLUSTER_INDEX -1

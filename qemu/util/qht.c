@@ -143,9 +143,9 @@ struct qht_map {
 /* trigger a resize when n_added_buckets > n_buckets / div */
 #define QHT_NR_ADDED_BUCKETS_THRESHOLD_DIV 8
 
-static void qht_do_resize_reset(struct uc_struct *uc, struct qht *ht, struct qht_map *new,
+static void qht_do_resize_reset(struct qc_struct *uc, struct qht *ht, struct qht_map *new,
                                 bool reset);
-static void qht_grow_maybe(struct uc_struct *uc, struct qht *ht);
+static void qht_grow_maybe(struct qc_struct *uc, struct qht *ht);
 
 #define qht_debug_assert(X) do { (void)(X); } while (0)
 
@@ -309,17 +309,17 @@ void qht_reset(struct qht *ht)
     qht_map_reset__all_locked(map);
 }
 
-static inline void qht_do_resize(struct uc_struct *uc, struct qht *ht, struct qht_map *new)
+static inline void qht_do_resize(struct qc_struct *uc, struct qht *ht, struct qht_map *new)
 {
     qht_do_resize_reset(uc, ht, new, false);
 }
 
-static inline void qht_do_resize_and_reset(struct uc_struct *uc, struct qht *ht, struct qht_map *new)
+static inline void qht_do_resize_and_reset(struct qc_struct *uc, struct qht *ht, struct qht_map *new)
 {
     qht_do_resize_reset(uc, ht, new, true);
 }
 
-bool qht_reset_size(struct uc_struct *uc, struct qht *ht, size_t n_elems)
+bool qht_reset_size(struct qc_struct *uc, struct qht *ht, size_t n_elems)
 {
     struct qht_map *new = NULL;
     struct qht_map *map;
@@ -337,7 +337,7 @@ bool qht_reset_size(struct uc_struct *uc, struct qht *ht, size_t n_elems)
 }
 
 static inline
-void *qht_do_lookup(struct uc_struct *uc, const struct qht_bucket *head, qht_lookup_func_t func,
+void *qht_do_lookup(struct qc_struct *uc, const struct qht_bucket *head, qht_lookup_func_t func,
                     const void *userp, uint32_t hash)
 {
     const struct qht_bucket *b = head;
@@ -359,7 +359,7 @@ void *qht_do_lookup(struct uc_struct *uc, const struct qht_bucket *head, qht_loo
     return NULL;
 }
 
-void *qht_lookup_custom(struct uc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash,
+void *qht_lookup_custom(struct qc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash,
                         qht_lookup_func_t func)
 {
     const struct qht_bucket *b;
@@ -373,7 +373,7 @@ void *qht_lookup_custom(struct uc_struct *uc, const struct qht *ht, const void *
     return ret;
 }
 
-void *qht_lookup(struct uc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash)
+void *qht_lookup(struct qc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash)
 {
     return qht_lookup_custom(uc, ht, userp, hash, ht->cmp);
 }
@@ -382,7 +382,7 @@ void *qht_lookup(struct uc_struct *uc, const struct qht *ht, const void *userp, 
  * call with head->lock held
  * @ht is const since it is only used for ht->cmp()
  */
-static void *qht_insert__locked(struct uc_struct *uc, const struct qht *ht, struct qht_map *map,
+static void *qht_insert__locked(struct qc_struct *uc, const struct qht *ht, struct qht_map *map,
                                 struct qht_bucket *head, void *p, uint32_t hash,
                                 bool *needs_resize)
 {
@@ -426,9 +426,9 @@ static void *qht_insert__locked(struct uc_struct *uc, const struct qht *ht, stru
 }
 
 #ifdef _MSC_VER
-static void qht_grow_maybe(struct uc_struct *uc, struct qht *ht)
+static void qht_grow_maybe(struct qc_struct *uc, struct qht *ht)
 #else
-static __attribute__((noinline)) void qht_grow_maybe(struct uc_struct *uc, struct qht *ht)
+static __attribute__((noinline)) void qht_grow_maybe(struct qc_struct *uc, struct qht *ht)
 #endif
 {
     struct qht_map *map;
@@ -442,7 +442,7 @@ static __attribute__((noinline)) void qht_grow_maybe(struct uc_struct *uc, struc
     }
 }
 
-bool qht_insert(struct uc_struct *uc, struct qht *ht, void *p, uint32_t hash, void **existing)
+bool qht_insert(struct qc_struct *uc, struct qht *ht, void *p, uint32_t hash, void **existing)
 {
     struct qht_bucket *b;
     struct qht_map *map;
@@ -565,7 +565,7 @@ bool qht_remove(struct qht *ht, const void *p, uint32_t hash)
     return ret;
 }
 
-static inline void qht_bucket_iter(struct uc_struct *uc, struct qht_bucket *head,
+static inline void qht_bucket_iter(struct qc_struct *uc, struct qht_bucket *head,
                                    const struct qht_iter *iter, void *userp)
 {
     struct qht_bucket *b = head;
@@ -598,7 +598,7 @@ static inline void qht_bucket_iter(struct uc_struct *uc, struct qht_bucket *head
 }
 
 /* call with all of the map's locks held */
-static inline void qht_map_iter__all_locked(struct uc_struct *uc, struct qht_map *map,
+static inline void qht_map_iter__all_locked(struct qc_struct *uc, struct qht_map *map,
                                             const struct qht_iter *iter,
                                             void *userp)
 {
@@ -610,7 +610,7 @@ static inline void qht_map_iter__all_locked(struct uc_struct *uc, struct qht_map
 }
 
 static inline void
-do_qht_iter(struct uc_struct *uc, struct qht *ht, const struct qht_iter *iter, void *userp)
+do_qht_iter(struct qc_struct *uc, struct qht *ht, const struct qht_iter *iter, void *userp)
 {
     struct qht_map *map;
 
@@ -618,7 +618,7 @@ do_qht_iter(struct uc_struct *uc, struct qht *ht, const struct qht_iter *iter, v
     qht_map_iter__all_locked(uc, map, iter, userp);
 }
 
-void qht_iter(struct uc_struct *uc, struct qht *ht, qht_iter_func_t func, void *userp)
+void qht_iter(struct qc_struct *uc, struct qht *ht, qht_iter_func_t func, void *userp)
 {
     const struct qht_iter iter = {
         .f.retvoid = func,
@@ -628,7 +628,7 @@ void qht_iter(struct uc_struct *uc, struct qht *ht, qht_iter_func_t func, void *
     do_qht_iter(uc, ht, &iter, userp);
 }
 
-void qht_iter_remove(struct uc_struct *uc, struct qht *ht, qht_iter_bool_func_t func, void *userp)
+void qht_iter_remove(struct qc_struct *uc, struct qht *ht, qht_iter_bool_func_t func, void *userp)
 {
     const struct qht_iter iter = {
         .f.retbool = func,
@@ -643,7 +643,7 @@ struct qht_map_copy_data {
     struct qht_map *new;
 };
 
-static void qht_map_copy(struct uc_struct *uc, void *p, uint32_t hash, void *userp)
+static void qht_map_copy(struct qc_struct *uc, void *p, uint32_t hash, void *userp)
 {
     struct qht_map_copy_data *data = userp;
     struct qht *ht = data->ht;
@@ -658,7 +658,7 @@ static void qht_map_copy(struct uc_struct *uc, void *p, uint32_t hash, void *use
  * Atomically perform a resize and/or reset.
  * Call with ht->lock held.
  */
-static void qht_do_resize_reset(struct uc_struct *uc, struct qht *ht, struct qht_map *new, bool reset)
+static void qht_do_resize_reset(struct qc_struct *uc, struct qht *ht, struct qht_map *new, bool reset)
 {
     struct qht_map *old;
     const struct qht_iter iter = {
@@ -686,7 +686,7 @@ static void qht_do_resize_reset(struct uc_struct *uc, struct qht *ht, struct qht
     qht_map_destroy(old);
 }
 
-bool qht_resize(struct uc_struct *uc, struct qht *ht, size_t n_elems)
+bool qht_resize(struct qc_struct *uc, struct qht *ht, size_t n_elems)
 {
     size_t n_buckets = qht_elems_to_buckets(n_elems);
     size_t ret = false;

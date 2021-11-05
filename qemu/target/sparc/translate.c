@@ -67,7 +67,7 @@ typedef struct DisasContext {
 #endif
 
     // Unicorn
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 } DisasContext;
 
 typedef struct {
@@ -5945,13 +5945,13 @@ static bool sparc_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cs,
 static void sparc_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
-    struct uc_struct *uc = dc->uc;
+    struct qc_struct *uc = dc->uc;
     TCGContext *tcg_ctx = uc->tcg_ctx;
     CPUSPARCState *env = cs->env_ptr;
     unsigned int insn;
 
     // Unicorn: end address tells us to stop emulation
-    if (uc_addr_is_exit(uc, dc->pc)) {
+    if (qc_addr_is_exit(uc, dc->pc)) {
 #ifndef TARGET_SPARC64
         gen_helper_power_down(tcg_ctx, tcg_ctx->cpu_env);
 #endif
@@ -5960,8 +5960,8 @@ static void sparc_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     }
 
     // Unicorn: trace this instruction on request
-    if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_CODE, dc->pc)) {
-        gen_uc_tracecode(tcg_ctx, 4, UC_HOOK_CODE_IDX, uc, dc->pc);
+    if (HOOK_EXISTS_BOUNDED(uc, QC_HOOK_CODE, dc->pc)) {
+        gen_qc_tracecode(tcg_ctx, 4, QC_HOOK_CODE_IDX, uc, dc->pc);
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);
     }
@@ -6029,7 +6029,7 @@ void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)
     translator_loop(&sparc_tr_ops, &dc.base, cs, tb, max_insns);
 }
 
-void sparc_tcg_init(struct uc_struct *uc)
+void sparc_tcg_init(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
 

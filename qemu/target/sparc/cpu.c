@@ -452,7 +452,7 @@ static bool sparc_cpu_has_work(CPUState *cs)
            cpu_interrupts_enabled(env);
 }
 
-static void sparc_cpu_realizefn(struct uc_struct *uc, CPUState *dev)
+static void sparc_cpu_realizefn(struct qc_struct *uc, CPUState *dev)
 {
     CPUState *cs = CPU(dev);
     SPARCCPU *cpu = SPARC_CPU(dev);
@@ -475,7 +475,7 @@ static void sparc_cpu_realizefn(struct uc_struct *uc, CPUState *dev)
     cpu_exec_realizefn(cs);
 }
 
-static void sparc_cpu_initfn(struct uc_struct *uc, CPUState *obj)
+static void sparc_cpu_initfn(struct qc_struct *uc, CPUState *obj)
 {
     SPARCCPU *cpu = SPARC_CPU(obj);
     SPARCCPUClass *scc = SPARC_CPU_GET_CLASS(obj);
@@ -490,7 +490,7 @@ static void sparc_cpu_initfn(struct uc_struct *uc, CPUState *obj)
     }
 }
 
-static void sparc_cpu_class_init(struct uc_struct *uc, CPUClass *oc)
+static void sparc_cpu_class_init(struct qc_struct *uc, CPUClass *oc)
 {
     SPARCCPUClass *scc = SPARC_CPU_CLASS(oc);
     CPUClass *cc = CPU_CLASS(oc);
@@ -510,7 +510,7 @@ static void sparc_cpu_class_init(struct uc_struct *uc, CPUClass *oc)
     cc->tcg_initialize = sparc_tcg_init;
 }
 
-SPARCCPU *cpu_sparc_init(struct uc_struct *uc)
+SPARCCPU *cpu_sparc_init(struct qc_struct *uc)
 {
     SPARCCPU *cpu;
     CPUState *cs;

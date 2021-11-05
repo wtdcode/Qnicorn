@@ -8,9 +8,9 @@
 
 #include "qemu/osdep.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
-void init_real_host_page_size(struct uc_struct *uc)
+void init_real_host_page_size(struct qc_struct *uc)
 {
     uc->qemu_real_host_page_size = getpagesize();
 }

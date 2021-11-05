@@ -26,7 +26,7 @@
  * THE SOFTWARE.
  */
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 #include "qemu/osdep.h"
 
 #ifdef CONFIG_LINUX
@@ -37,12 +37,12 @@
 #endif /* CONFIG_LINUX */
 
 #ifndef __MINGW32__
-static void *qemu_ram_mmap(struct uc_struct *uc,
+static void *qemu_ram_mmap(struct qc_struct *uc,
                     size_t size,
                     size_t align,
                     bool shared);
 
-static void qemu_ram_munmap(struct uc_struct *uc, void *ptr, size_t size);
+static void qemu_ram_munmap(struct qc_struct *uc, void *ptr, size_t size);
 #endif
 
 void *qemu_oom_check(void *ptr)
@@ -96,7 +96,7 @@ static int get_allocation_granularity(void)
 #endif
 
 /* alloc shared memory pages */
-void *qemu_anon_ram_alloc(struct uc_struct *uc, size_t size, uint64_t *alignment)
+void *qemu_anon_ram_alloc(struct qc_struct *uc, size_t size, uint64_t *alignment)
 {
 #ifdef __MINGW32__
     void *ptr;
@@ -137,7 +137,7 @@ void qemu_vfree(void *ptr)
 #endif
 }
 
-void qemu_anon_ram_free(struct uc_struct *uc, void *ptr, size_t size)
+void qemu_anon_ram_free(struct qc_struct *uc, void *ptr, size_t size)
 {
 #ifdef __MINGW32__
     if (ptr) {
@@ -150,7 +150,7 @@ void qemu_anon_ram_free(struct uc_struct *uc, void *ptr, size_t size)
 }
 
 #if defined(__powerpc64__) && defined(__linux__)
-static size_t qemu_fd_getpagesize(struct uc_struct *uc)
+static size_t qemu_fd_getpagesize(struct qc_struct *uc)
 {
 #ifdef CONFIG_LINUX
 #ifdef __sparc__
@@ -164,7 +164,7 @@ static size_t qemu_fd_getpagesize(struct uc_struct *uc)
 #endif
 
 #ifndef __MINGW32__
-static void *qemu_ram_mmap(struct uc_struct *uc,
+static void *qemu_ram_mmap(struct qc_struct *uc,
                     size_t size,
                     size_t align,
                     bool shared)
@@ -257,7 +257,7 @@ static void *qemu_ram_mmap(struct uc_struct *uc,
     return ptr;
 }
 
-static void qemu_ram_munmap(struct uc_struct *uc, void *ptr, size_t size)
+static void qemu_ram_munmap(struct qc_struct *uc, void *ptr, size_t size)
 {
     size_t pagesize;
 

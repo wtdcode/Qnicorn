@@ -304,7 +304,7 @@ static void tlbiasid_is_write(CPUARMState *env, const ARMCPRegInfo *ri,
 static void tlbimva_is_write(CPUARMState *env, const ARMCPRegInfo *ri,
                              uint64_t value)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     CPUState *cs = env_cpu(env);
 
     tlb_flush_page_all_cpus_synced(cs, value & TARGET_PAGE_MASK);
@@ -313,7 +313,7 @@ static void tlbimva_is_write(CPUARMState *env, const ARMCPRegInfo *ri,
 static void tlbimvaa_is_write(CPUARMState *env, const ARMCPRegInfo *ri,
                              uint64_t value)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     CPUState *cs = env_cpu(env);
 
     tlb_flush_page_all_cpus_synced(cs, value & TARGET_PAGE_MASK);
@@ -346,7 +346,7 @@ static void tlbiall_write(CPUARMState *env, const ARMCPRegInfo *ri,
 static void tlbimva_write(CPUARMState *env, const ARMCPRegInfo *ri,
                           uint64_t value)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     /* Invalidate single TLB entry by MVA and ASID (TLBIMVA) */
     CPUState *cs = env_cpu(env);
 
@@ -374,7 +374,7 @@ static void tlbiasid_write(CPUARMState *env, const ARMCPRegInfo *ri,
 static void tlbimvaa_write(CPUARMState *env, const ARMCPRegInfo *ri,
                            uint64_t value)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     /* Invalidate single entry by MVA, all ASIDs (TLBIMVAA) */
     CPUState *cs = env_cpu(env);
 
@@ -6364,7 +6364,7 @@ static void dccvap_writefn(CPUARMState *env, const ARMCPRegInfo *opaque,
                           uint64_t value)
 {
     ARMCPU *cpu = env_archcpu(env);
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     /* CTR_EL0 System register -> DminLine, bits [19:16] */
     uint64_t dline_size = 4 << ((cpu->ctr >> 16) & 0xF);
     uint64_t vaddr_in = (uint64_t) value;
@@ -9353,7 +9353,7 @@ static hwaddr S1_ptw_translate(CPUARMState *env, ARMMMUIdx mmu_idx,
 static uint32_t arm_ldl_ptw(CPUState *cs, hwaddr addr, bool is_secure,
                             ARMMMUIdx mmu_idx, ARMMMUFaultInfo *fi)
 {
-    struct uc_struct *uc = cs->uc;
+    struct qc_struct *uc = cs->uc;
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
     MemTxAttrs attrs = { 0 };
@@ -10299,7 +10299,7 @@ static bool get_phys_addr_pmsav7(CPUARMState *env, uint32_t address,
                                  target_ulong *page_size,
                                  ARMMMUFaultInfo *fi)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     ARMCPU *cpu = env_archcpu(env);
     int n;
     bool is_user = regime_is_user(env, mmu_idx);
@@ -10596,7 +10596,7 @@ bool pmsav8_mpu_lookup(CPUARMState *env, uint32_t address,
                               int *prot, bool *is_subpage,
                               ARMMMUFaultInfo *fi, uint32_t *mregion)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     /* Perform a PMSAv8 MPU lookup (without also doing the SAU check
      * that a full phys-to-virt translation does).
      * mregion is (if not NULL) set to the region number which matched,
@@ -10729,7 +10729,7 @@ static bool get_phys_addr_pmsav8(CPUARMState *env, uint32_t address,
                                  int *prot, target_ulong *page_size,
                                  ARMMMUFaultInfo *fi)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     uint32_t secure = regime_is_secure(env, mmu_idx);
     V8M_SAttributes sattrs = { 0 };
     bool ret;
@@ -11002,7 +11002,7 @@ bool get_phys_addr(CPUARMState *env, target_ulong address,
                    target_ulong *page_size,
                    ARMMMUFaultInfo *fi, ARMCacheAttrs *cacheattrs)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     if (mmu_idx == ARMMMUIdx_E10_0 ||
         mmu_idx == ARMMMUIdx_E10_1 ||
         mmu_idx == ARMMMUIdx_E10_1_PAN) {

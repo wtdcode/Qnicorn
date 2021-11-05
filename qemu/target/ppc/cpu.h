@@ -1102,7 +1102,7 @@ struct CPUPPCState {
     uint64_t tm_tar;
 
     /* Unicorn engine */
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 #define SET_FIT_PERIOD(a_, b_, c_, d_)          \
@@ -1213,7 +1213,7 @@ extern const VMStateDescription vmstate_ppc_cpu;
 #endif
 
 /*****************************************************************************/
-void ppc_translate_init(struct uc_struct *uc);
+void ppc_translate_init(struct qc_struct *uc);
 
 /*
  * you can call this signal handler from your SIGBUS and SIGSEGV

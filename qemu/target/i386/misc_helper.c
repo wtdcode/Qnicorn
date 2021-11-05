@@ -24,7 +24,7 @@
 #include "exec/cpu_ldst.h"
 #include "exec/ioport.h"
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 void helper_outb(CPUX86State *env, uint32_t port, uint32_t data)
 {
@@ -118,13 +118,13 @@ void helper_cpuid(CPUX86State *env)
 
     // Unicorn: call registered CPUID hooks
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(env->uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
         if (!HOOK_BOUND_CHECK(hook, env->eip))
             continue;
-        if (hook->insn == UC_X86_INS_CPUID)
-            ((uc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
+        if (hook->insn == QC_X86_INS_CPUID)
+            ((qc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
 
         // the last callback may already asked to stop emulation
         if (env->uc->stop_request)

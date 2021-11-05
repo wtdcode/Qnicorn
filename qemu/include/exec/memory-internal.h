@@ -37,12 +37,12 @@ void flatview_unref(FlatView *view);
 
 extern const MemoryRegionOps unassigned_mem_ops;
 
-bool memory_region_access_valid(struct uc_struct *uc, MemoryRegion *mr, hwaddr addr,
+bool memory_region_access_valid(struct qc_struct *uc, MemoryRegion *mr, hwaddr addr,
                                 unsigned size, bool is_write,
                                 MemTxAttrs attrs);
 
-void flatview_add_to_dispatch(struct uc_struct *uc, FlatView *fv, MemoryRegionSection *section);
-AddressSpaceDispatch *address_space_dispatch_new(struct uc_struct *uc, FlatView *fv);
+void flatview_add_to_dispatch(struct qc_struct *uc, FlatView *fv, MemoryRegionSection *section);
+AddressSpaceDispatch *address_space_dispatch_new(struct qc_struct *uc, FlatView *fv);
 void address_space_dispatch_compact(AddressSpaceDispatch *d);
 void address_space_dispatch_free(AddressSpaceDispatch *d);
 

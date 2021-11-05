@@ -33,7 +33,7 @@
 #include "exec/cpu-common.h"
 #include "trace/mem.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 #include <glib_compat.h>
 
@@ -127,7 +127,7 @@ static void tlb_window_reset(CPUTLBDesc *desc, int64_t ns,
  * high), since otherwise we are likely to have a significant amount of
  * conflict misses.
  */
-static void tlb_mmu_resize_locked(struct uc_struct *uc, CPUTLBDesc *desc, CPUTLBDescFast *fast,
+static void tlb_mmu_resize_locked(struct qc_struct *uc, CPUTLBDesc *desc, CPUTLBDescFast *fast,
                                   int64_t now)
 {
     size_t old_size = tlb_n_entries(fast);
@@ -352,7 +352,7 @@ void tlb_flush_all_cpus_synced(CPUState *src_cpu)
     tlb_flush_by_mmuidx_all_cpus_synced(src_cpu, ALL_MMUIDX_BITS);
 }
 
-static inline bool tlb_hit_page_anyprot(struct uc_struct *uc, CPUTLBEntry *tlb_entry,
+static inline bool tlb_hit_page_anyprot(struct qc_struct *uc, CPUTLBEntry *tlb_entry,
                                         target_ulong page)
 {
     return tlb_hit_page(uc, tlb_entry->addr_read, page) ||
@@ -370,7 +370,7 @@ static inline bool tlb_entry_is_empty(const CPUTLBEntry *te)
 }
 
 /* Called with tlb_c.lock held */
-static inline bool tlb_flush_entry_locked(struct uc_struct *uc, CPUTLBEntry *tlb_entry,
+static inline bool tlb_flush_entry_locked(struct qc_struct *uc, CPUTLBEntry *tlb_entry,
                                           target_ulong page)
 {
     if (tlb_hit_page_anyprot(uc, tlb_entry, page)) {
@@ -451,7 +451,7 @@ static void tlb_flush_page_by_mmuidx_async_1(CPUState *cpu,
                                              run_on_cpu_data data)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
     target_ulong addr_and_idxmap = (target_ulong) data.target_ptr;
     target_ulong addr = addr_and_idxmap & TARGET_PAGE_MASK;
@@ -487,7 +487,7 @@ static void tlb_flush_page_by_mmuidx_async_2(CPUState *cpu,
 void tlb_flush_page_by_mmuidx(CPUState *cpu, target_ulong addr, uint16_t idxmap)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
 
     /* This should already be page aligned */
@@ -524,7 +524,7 @@ void tlb_flush_page_by_mmuidx_all_cpus(CPUState *src_cpu, target_ulong addr,
                                        uint16_t idxmap)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = src_cpu->uc;
+    struct qc_struct *uc = src_cpu->uc;
 #endif
 
     /* This should already be page aligned */
@@ -568,7 +568,7 @@ void tlb_flush_page_by_mmuidx_all_cpus_synced(CPUState *src_cpu,
                                               uint16_t idxmap)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = src_cpu->uc;
+    struct qc_struct *uc = src_cpu->uc;
 #endif
 
     /* This should already be page aligned */
@@ -612,7 +612,7 @@ void tlb_flush_page_all_cpus_synced(CPUState *src, target_ulong addr)
 
 /* update the TLBs so that writes to code in the virtual page 'addr'
    can be detected */
-void tlb_protect_code(struct uc_struct *uc, ram_addr_t ram_addr)
+void tlb_protect_code(struct qc_struct *uc, ram_addr_t ram_addr)
 {
     cpu_physical_memory_test_and_clear_dirty(ram_addr, TARGET_PAGE_SIZE,
                                              DIRTY_MEMORY_CODE);
@@ -620,7 +620,7 @@ void tlb_protect_code(struct uc_struct *uc, ram_addr_t ram_addr)
 
 /* update the TLB so that writes in physical page 'phys_addr' are no longer
    tested for self modifying code */
-void tlb_unprotect_code(struct uc_struct *uc, ram_addr_t ram_addr)
+void tlb_unprotect_code(struct qc_struct *uc, ram_addr_t ram_addr)
 {
     cpu_physical_memory_set_dirty_flag(ram_addr, DIRTY_MEMORY_CODE);
 }
@@ -642,7 +642,7 @@ void tlb_unprotect_code(struct uc_struct *uc, ram_addr_t ram_addr)
  *
  * Called with tlb_c.lock held.
  */
-static void tlb_reset_dirty_range_locked(struct uc_struct *uc, CPUTLBEntry *tlb_entry,
+static void tlb_reset_dirty_range_locked(struct qc_struct *uc, CPUTLBEntry *tlb_entry,
                                          uintptr_t start, uintptr_t length)
 {
     uintptr_t addr = tlb_entry->addr_write;
@@ -677,7 +677,7 @@ static inline void copy_tlb_helper_locked(CPUTLBEntry *d, const CPUTLBEntry *s)
  */
 void tlb_reset_dirty(CPUState *cpu, ram_addr_t start1, ram_addr_t length)
 {
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
     CPUArchState *env;
 
     int mmu_idx;
@@ -713,7 +713,7 @@ static inline void tlb_set_dirty1_locked(CPUTLBEntry *tlb_entry,
 void tlb_set_dirty(CPUState *cpu, target_ulong vaddr)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
     CPUArchState *env = cpu->env_ptr;
     int mmu_idx;
@@ -769,7 +769,7 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
                              int mmu_idx, target_ulong size)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
     CPUArchState *env = cpu->env_ptr;
     CPUTLB *tlb = env_tlb(env);
@@ -934,7 +934,7 @@ void tlb_set_page(CPUState *cpu, target_ulong vaddr,
                             prot, mmu_idx, size);
 }
 
-static inline ram_addr_t qemu_ram_addr_from_host_nofail(struct uc_struct *uc, void *ptr)
+static inline ram_addr_t qemu_ram_addr_from_host_nofail(struct qc_struct *uc, void *ptr)
 {
     ram_addr_t ram_addr;
 
@@ -974,7 +974,7 @@ static uint64_t io_readx(CPUArchState *env, CPUIOTLBEntry *iotlbentry,
                          MMUAccessType access_type, MemOp op)
 {
     CPUState *cpu = env_cpu(env);
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
     hwaddr mr_offset;
     MemoryRegionSection *section;
     MemoryRegion *mr;
@@ -1009,7 +1009,7 @@ static void io_writex(CPUArchState *env, CPUIOTLBEntry *iotlbentry,
                       uintptr_t retaddr, MemOp op)
 {
     CPUState *cpu = env_cpu(env);
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     hwaddr mr_offset;
     MemoryRegionSection *section;
     MemoryRegion *mr;
@@ -1099,7 +1099,7 @@ static bool victim_tlb_hit(CPUArchState *env, size_t mmu_idx, size_t index,
 tb_page_addr_t get_page_addr_code_hostp(CPUArchState *env, target_ulong addr,
                                         void **hostp)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     uintptr_t mmu_idx = cpu_mmu_index(env, true);
     uintptr_t index = tlb_index(env, mmu_idx, addr);
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
@@ -1180,7 +1180,7 @@ void *probe_access(CPUArchState *env, target_ulong addr, int size,
                    MMUAccessType access_type, int mmu_idx, uintptr_t retaddr)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
 #endif
     uintptr_t index = tlb_index(env, mmu_idx, addr);
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
@@ -1253,7 +1253,7 @@ void *probe_access(CPUArchState *env, target_ulong addr, int size,
 void *tlb_vaddr_to_host(CPUArchState *env, abi_ptr addr,
                         MMUAccessType access_type, int mmu_idx)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
     target_ulong tlb_addr, page;
     size_t elt_ofs = 0;
@@ -1307,7 +1307,7 @@ static void *atomic_mmu_lookup(CPUArchState *env, target_ulong addr,
                                TCGMemOpIdx oi, uintptr_t retaddr)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
 #endif
     size_t mmu_idx = get_mmuidx(oi);
     uintptr_t index = tlb_index(env, mmu_idx, addr);
@@ -1435,7 +1435,7 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     struct hook *hook;
     bool handled;
     HOOK_FOREACH_VAR_DECLARE;
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     MemoryRegion *mr = memory_mapping(uc, addr);
 
     // memory might be still unmapped while reading or fetching
@@ -1443,13 +1443,13 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
         handled = false;
         if (code_read) {
             // code fetching
-            error_code = UC_ERR_FETCH_UNMAPPED;
-            HOOK_FOREACH(uc, hook, UC_HOOK_MEM_FETCH_UNMAPPED) {
+            error_code = QC_ERR_FETCH_UNMAPPED;
+            HOOK_FOREACH(uc, hook, QC_HOOK_MEM_FETCH_UNMAPPED) {
                 if (hook->to_delete)
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, addr))
                     continue;
-                if ((handled = ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_FETCH_UNMAPPED, addr, size - uc->size_recur_mem, 0, hook->user_data)))
+                if ((handled = ((qc_cb_eventmem_t)hook->callback)(uc, QC_MEM_FETCH_UNMAPPED, addr, size - uc->size_recur_mem, 0, hook->user_data)))
                     break;
 
                 // the last callback may already asked to stop emulation
@@ -1458,13 +1458,13 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
             }
         } else {
             // data reading
-            error_code = UC_ERR_READ_UNMAPPED;
-            HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ_UNMAPPED) {
+            error_code = QC_ERR_READ_UNMAPPED;
+            HOOK_FOREACH(uc, hook, QC_HOOK_MEM_READ_UNMAPPED) {
                 if (hook->to_delete)
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, addr))
                     continue;
-                if ((handled = ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_READ_UNMAPPED, addr, size - uc->size_recur_mem, 0, hook->user_data)))
+                if ((handled = ((qc_cb_eventmem_t)hook->callback)(uc, QC_MEM_READ_UNMAPPED, addr, size - uc->size_recur_mem, 0, hook->user_data)))
                     break;
 
                 // the last callback may already asked to stop emulation
@@ -1474,10 +1474,10 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
         }
 
         if (handled) {
-            uc->invalid_error = UC_ERR_OK;
+            uc->invalid_error = QC_ERR_OK;
             mr = memory_mapping(uc, addr);
             if (mr == NULL) {
-                uc->invalid_error = UC_ERR_MAP;
+                uc->invalid_error = QC_ERR_MAP;
                 cpu_exit(uc->cpu);
                 return 0;
             }
@@ -1493,12 +1493,12 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     // now it is read on mapped memory
     if (!code_read) {
         // this is date reading
-        HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ) {
+        HOOK_FOREACH(uc, hook, QC_HOOK_MEM_READ) {
             if (hook->to_delete)
                 continue;
             if (!HOOK_BOUND_CHECK(hook, addr))
                 continue;
-            ((uc_cb_hookmem_t)hook->callback)(env->uc, UC_MEM_READ, addr, size, 0, hook->user_data);
+            ((qc_cb_hookmem_t)hook->callback)(env->uc, QC_MEM_READ, addr, size, 0, hook->user_data);
 
             // the last callback may already asked to stop emulation
             if (uc->stop_request)
@@ -1506,14 +1506,14 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
         }
 
         // callback on non-readable memory
-        if (mr != NULL && !(mr->perms & UC_PROT_READ)) {  //non-readable
+        if (mr != NULL && !(mr->perms & QC_PROT_READ)) {  //non-readable
             handled = false;
-            HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ_PROT) {
+            HOOK_FOREACH(uc, hook, QC_HOOK_MEM_READ_PROT) {
                 if (hook->to_delete)
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, addr))
                     continue;
-                if ((handled = ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_READ_PROT, addr, size - uc->size_recur_mem, 0, hook->user_data)))
+                if ((handled = ((qc_cb_eventmem_t)hook->callback)(uc, QC_MEM_READ_PROT, addr, size - uc->size_recur_mem, 0, hook->user_data)))
                     break;
 
                 // the last callback may already asked to stop emulation
@@ -1522,10 +1522,10 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
             }
 
             if (handled) {
-                uc->invalid_error = UC_ERR_OK;
+                uc->invalid_error = QC_ERR_OK;
             } else {
                 uc->invalid_addr = addr;
-                uc->invalid_error = UC_ERR_READ_PROT;
+                uc->invalid_error = QC_ERR_READ_PROT;
                 // printf("***** Invalid memory read (non-readable) at " TARGET_FMT_lx "\n", addr);
                 cpu_exit(uc->cpu);
                 return 0;
@@ -1534,14 +1534,14 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     } else {
         // code fetching
         // Unicorn: callback on fetch from NX
-        if (mr != NULL && !(mr->perms & UC_PROT_EXEC)) {  // non-executable
+        if (mr != NULL && !(mr->perms & QC_PROT_EXEC)) {  // non-executable
             handled = false;
-            HOOK_FOREACH(uc, hook, UC_HOOK_MEM_FETCH_PROT) {
+            HOOK_FOREACH(uc, hook, QC_HOOK_MEM_FETCH_PROT) {
                 if (hook->to_delete)
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, addr))
                     continue;
-                if ((handled = ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_FETCH_PROT, addr, size - uc->size_recur_mem, 0, hook->user_data)))
+                if ((handled = ((qc_cb_eventmem_t)hook->callback)(uc, QC_MEM_FETCH_PROT, addr, size - uc->size_recur_mem, 0, hook->user_data)))
                     break;
 
                 // the last callback may already asked to stop emulation
@@ -1550,10 +1550,10 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
             }
 
             if (handled) {
-                uc->invalid_error = UC_ERR_OK;
+                uc->invalid_error = QC_ERR_OK;
             } else {
                 uc->invalid_addr = addr;
-                uc->invalid_error = UC_ERR_FETCH_PROT;
+                uc->invalid_error = QC_ERR_FETCH_PROT;
                 // printf("***** Invalid fetch (non-executable) at " TARGET_FMT_lx "\n", addr);
                 cpu_exit(uc->cpu);
                 return 0;
@@ -1655,12 +1655,12 @@ _out:
     // Unicorn: callback on successful data read
     if (!code_read) {
         if (!uc->size_recur_mem) { // disabling read callback if in recursive call
-            HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ_AFTER) {
+            HOOK_FOREACH(uc, hook, QC_HOOK_MEM_READ_AFTER) {
                 if (hook->to_delete)
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, addr))
                     continue;
-                ((uc_cb_hookmem_t)hook->callback)(env->uc, UC_MEM_READ_AFTER, addr, size, res, hook->user_data);
+                ((qc_cb_hookmem_t)hook->callback)(env->uc, QC_MEM_READ_AFTER, addr, size, res, hook->user_data);
 
                 // the last callback may already asked to stop emulation
                 if (uc->stop_request)
@@ -1960,7 +1960,7 @@ static void inline
 store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
              TCGMemOpIdx oi, uintptr_t retaddr, MemOp op)
 {
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     HOOK_FOREACH_VAR_DECLARE;
     uintptr_t mmu_idx = get_mmuidx(oi);
     uintptr_t index = tlb_index(env, mmu_idx, addr);
@@ -1976,12 +1976,12 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
 
     if (!uc->size_recur_mem) { // disabling write callback if in recursive call
         // Unicorn: callback on memory write
-        HOOK_FOREACH(uc, hook, UC_HOOK_MEM_WRITE) {
+        HOOK_FOREACH(uc, hook, QC_HOOK_MEM_WRITE) {
             if (hook->to_delete)
                 continue;
             if (!HOOK_BOUND_CHECK(hook, addr))
                 continue;
-            ((uc_cb_hookmem_t)hook->callback)(uc, UC_MEM_WRITE, addr, size, val, hook->user_data);
+            ((qc_cb_hookmem_t)hook->callback)(uc, QC_MEM_WRITE, addr, size, val, hook->user_data);
 
             // the last callback may already asked to stop emulation
             if (uc->stop_request)
@@ -1992,12 +1992,12 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
     // Unicorn: callback on invalid memory
     if (mr == NULL) {
         handled = false;
-        HOOK_FOREACH(uc, hook, UC_HOOK_MEM_WRITE_UNMAPPED) {
+        HOOK_FOREACH(uc, hook, QC_HOOK_MEM_WRITE_UNMAPPED) {
             if (hook->to_delete)
                 continue;
             if (!HOOK_BOUND_CHECK(hook, addr))
                 continue;
-            if ((handled = ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_WRITE_UNMAPPED, addr, size, val, hook->user_data)))
+            if ((handled = ((qc_cb_eventmem_t)hook->callback)(uc, QC_MEM_WRITE_UNMAPPED, addr, size, val, hook->user_data)))
                 break;
 
             // the last callback may already asked to stop emulation
@@ -2008,15 +2008,15 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
         if (!handled) {
             // save error & quit
             uc->invalid_addr = addr;
-            uc->invalid_error = UC_ERR_WRITE_UNMAPPED;
+            uc->invalid_error = QC_ERR_WRITE_UNMAPPED;
             // printf("***** Invalid memory write at " TARGET_FMT_lx "\n", addr);
             cpu_exit(uc->cpu);
             return;
         } else {
-            uc->invalid_error = UC_ERR_OK;
+            uc->invalid_error = QC_ERR_OK;
             mr = memory_mapping(uc, addr);
             if (mr == NULL) {
-                uc->invalid_error = UC_ERR_MAP;
+                uc->invalid_error = QC_ERR_MAP;
                 cpu_exit(uc->cpu);
                 return;
             }
@@ -2024,15 +2024,15 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
     }
 
     // Unicorn: callback on non-writable memory
-    if (mr != NULL && !(mr->perms & UC_PROT_WRITE)) {  //non-writable
+    if (mr != NULL && !(mr->perms & QC_PROT_WRITE)) {  //non-writable
         // printf("not writable memory???\n");
         handled = false;
-        HOOK_FOREACH(uc, hook, UC_HOOK_MEM_WRITE_PROT) {
+        HOOK_FOREACH(uc, hook, QC_HOOK_MEM_WRITE_PROT) {
             if (hook->to_delete)
                 continue;
             if (!HOOK_BOUND_CHECK(hook, addr))
                 continue;
-            if ((handled = ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_WRITE_PROT, addr, size, val, hook->user_data)))
+            if ((handled = ((qc_cb_eventmem_t)hook->callback)(uc, QC_MEM_WRITE_PROT, addr, size, val, hook->user_data)))
                 break;
 
             // the last callback may already asked to stop emulation
@@ -2041,10 +2041,10 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
         }
 
         if (handled) {
-            uc->invalid_error = UC_ERR_OK;
+            uc->invalid_error = QC_ERR_OK;
         } else {
             uc->invalid_addr = addr;
-            uc->invalid_error = UC_ERR_WRITE_PROT;
+            uc->invalid_error = QC_ERR_WRITE_PROT;
             // printf("***** Invalid memory write (ro) at " TARGET_FMT_lx "\n", addr);
             cpu_exit(uc->cpu);
             return;

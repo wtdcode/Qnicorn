@@ -35,7 +35,7 @@ static inline void *ramblock_ptr(RAMBlock *block, ram_addr_t offset)
     return (char *)block->host + offset;
 }
 
-static inline unsigned long int ramblock_recv_bitmap_offset(struct uc_struct *uc, void *host_addr,
+static inline unsigned long int ramblock_recv_bitmap_offset(struct qc_struct *uc, void *host_addr,
                                                             RAMBlock *rb)
 {
     uint64_t host_addr_offset =
@@ -43,15 +43,15 @@ static inline unsigned long int ramblock_recv_bitmap_offset(struct uc_struct *uc
     return host_addr_offset >> TARGET_PAGE_BITS;
 }
 
-RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *host,
+RAMBlock *qemu_ram_alloc_from_ptr(struct qc_struct *uc, ram_addr_t size, void *host,
                                   MemoryRegion *mr);
-RAMBlock *qemu_ram_alloc(struct uc_struct *uc, ram_addr_t size, MemoryRegion *mr);
-void qemu_ram_free(struct uc_struct *uc, RAMBlock *block);
+RAMBlock *qemu_ram_alloc(struct qc_struct *uc, ram_addr_t size, MemoryRegion *mr);
+void qemu_ram_free(struct qc_struct *uc, RAMBlock *block);
 
 #define DIRTY_CLIENTS_ALL     ((1 << DIRTY_MEMORY_NUM) - 1)
 #define DIRTY_CLIENTS_NOCODE  (DIRTY_CLIENTS_ALL & ~(1 << DIRTY_MEMORY_CODE))
 
-void tb_invalidate_phys_range(struct uc_struct *uc, ram_addr_t start, ram_addr_t end);
+void tb_invalidate_phys_range(struct qc_struct *uc, ram_addr_t start, ram_addr_t end);
 
 static inline bool cpu_physical_memory_get_dirty(ram_addr_t start,
                                                  ram_addr_t length,

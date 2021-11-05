@@ -10,10 +10,10 @@
 
 #include <stdbool.h>
 
-//#include "uc_priv.h"
+//#include "qc_priv.h"
 
-struct uc_struct;
+struct qc_struct;
 
-void tcg_exec_init(struct uc_struct *uc, unsigned long tb_size);
+void tcg_exec_init(struct qc_struct *uc, unsigned long tb_size);
 
 #endif

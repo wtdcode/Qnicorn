@@ -16,7 +16,7 @@
 #include <assert.h>
 #include <limits.h>
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 
 static void error_exit(int err, const char *msg)
@@ -40,7 +40,7 @@ struct QemuThreadData {
     bool              exited;
     void             *ret;
     CRITICAL_SECTION  cs;
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 static unsigned __stdcall win32_start_routine(void *arg)
@@ -58,7 +58,7 @@ static unsigned __stdcall win32_start_routine(void *arg)
     abort();
 }
 
-void qemu_thread_exit(struct uc_struct *uc, void *arg)
+void qemu_thread_exit(struct qc_struct *uc, void *arg)
 {
     QemuThreadData *data = uc->qemu_thread_data;
 
@@ -103,7 +103,7 @@ void *qemu_thread_join(QemuThread *thread)
     return ret;
 }
 
-int qemu_thread_create(struct uc_struct *uc, QemuThread *thread, const char *name,
+int qemu_thread_create(struct qc_struct *uc, QemuThread *thread, const char *name,
                        void *(*start_routine)(void *),
                        void *arg, int mode)
 {

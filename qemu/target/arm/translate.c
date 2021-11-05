@@ -62,7 +62,7 @@ typedef void NeonGenThreeOpEnvFn(TCGContext *, TCGv_i32, TCGv_env, TCGv_i32,
 typedef void VFPGenFixPointFn(TCGContext *, TCGv_i32, TCGv_i32, TCGv_i32, TCGv_ptr);
 
 /* initialize TCG globals.  */
-void arm_translate_init(struct uc_struct *uc)
+void arm_translate_init(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     int i;
@@ -2675,7 +2675,7 @@ static void gen_neon_dup_high16(TCGContext *tcg_ctx, TCGv_i32 var)
 
 static inline bool use_goto_tb(DisasContext *s, target_ulong dest)
 {
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
     return (s->base.tb->pc & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) ||
            ((s->base.pc_next - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK);
 }
@@ -10909,8 +10909,8 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
     }
 
     // Unicorn: trace this instruction on request
-    if (HOOK_EXISTS_BOUNDED(s->uc, UC_HOOK_CODE, s->pc_curr)) {
-        gen_uc_tracecode(tcg_ctx, 4, UC_HOOK_CODE_IDX, s->uc, s->pc_curr);
+    if (HOOK_EXISTS_BOUNDED(s->uc, QC_HOOK_CODE, s->pc_curr)) {
+        gen_qc_tracecode(tcg_ctx, 4, QC_HOOK_CODE_IDX, s->uc, s->pc_curr);
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);
     }
@@ -11011,7 +11011,7 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
 
 static bool thumb_insn_is_16bit(DisasContext *s, uint32_t pc, uint32_t insn)
 {
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
     /*
      * Return true if this is a 16 bit instruction. We must be precise
      * about this (matching the decode).
@@ -11190,7 +11190,7 @@ static bool insn_crosses_page(CPUARMState *env, DisasContext *s)
 static void arm_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
-    struct uc_struct *uc = cs->uc;
+    struct qc_struct *uc = cs->uc;
     TCGContext *tcg_ctx = cs->uc->tcg_ctx;
     CPUARMState *env = cs->env_ptr;
     ARMCPU *cpu = env_archcpu(env);
@@ -11421,7 +11421,7 @@ static void arm_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     }
 
     // Unicorn: end address tells us to stop emulation
-    if (uc_addr_is_exit(dc->uc, dcbase->pc_next)) {
+    if (qc_addr_is_exit(dc->uc, dcbase->pc_next)) {
         // imitate WFI instruction to halt emulation
         dcbase->is_jmp = DISAS_WFI;
     } else {
@@ -11487,7 +11487,7 @@ static bool thumb_insn_is_unconditional(DisasContext *s, uint32_t insn)
 static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
-    struct uc_struct *uc = dc->uc;
+    struct qc_struct *uc = dc->uc;
     TCGContext *tcg_ctx = uc->tcg_ctx;
     CPUARMState *env = cpu->env_ptr;
     uint32_t insn;
@@ -11499,7 +11499,7 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     }
 
     // Unicorn: end address tells us to stop emulation
-    if (uc_addr_is_exit(uc, dcbase->pc_next)) {
+    if (qc_addr_is_exit(uc, dcbase->pc_next)) {
         // imitate WFI instruction to halt emulation
         dcbase->is_jmp = DISAS_WFI;
         return;
@@ -11537,11 +11537,11 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 
     // Unicorn: trace this instruction on request
     insn_size = is_16bit ? 2 : 4;
-    if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_CODE, dc->base.pc_next - insn_size)) {
+    if (HOOK_EXISTS_BOUNDED(uc, QC_HOOK_CODE, dc->base.pc_next - insn_size)) {
         if (uc->no_exit_request) {
-            gen_uc_tracecode(tcg_ctx, insn_size, UC_HOOK_CODE_IDX | UC_HOOK_FLAG_NO_STOP, uc, dc->base.pc_next - insn_size);
+            gen_qc_tracecode(tcg_ctx, insn_size, QC_HOOK_CODE_IDX | QC_HOOK_FLAG_NO_STOP, uc, dc->base.pc_next - insn_size);
         } else {
-            gen_uc_tracecode(tcg_ctx, insn_size, UC_HOOK_CODE_IDX, uc, dc->base.pc_next - insn_size);
+            gen_qc_tracecode(tcg_ctx, insn_size, QC_HOOK_CODE_IDX, uc, dc->base.pc_next - insn_size);
         }
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);
@@ -11589,7 +11589,7 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 static void arm_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
-    struct uc_struct *uc = dc->uc;
+    struct qc_struct *uc = dc->uc;
     TCGContext *tcg_ctx = uc->tcg_ctx;
 
     if (tb_cflags(dc->base.tb) & CF_LAST_IO && dc->condjmp) {

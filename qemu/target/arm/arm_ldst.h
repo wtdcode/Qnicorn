@@ -23,7 +23,7 @@
 #include "exec/translator.h"
 #include "qemu/bswap.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 /* Load an instruction and return it in the standard little-endian order */
 static inline uint32_t arm_ldl_code(CPUARMState *env, target_ulong addr,

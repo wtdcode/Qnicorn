@@ -23,7 +23,7 @@
 #include "internal.h"
 #include "exec/exec-all.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 static void mips_cpu_set_pc(CPUState *cs, vaddr value)
 {
@@ -121,7 +121,7 @@ static void mips_cpu_realizefn(CPUState *dev)
     cpu_reset(cs);
 }
 
-static void mips_cpu_initfn(struct uc_struct *uc, CPUState *obj)
+static void mips_cpu_initfn(struct qc_struct *uc, CPUState *obj)
 {
     MIPSCPU *cpu = MIPS_CPU(obj);
     CPUMIPSState *env = &cpu->env;
@@ -150,7 +150,7 @@ static void mips_cpu_class_init(CPUClass *c)
     cc->tlb_fill = mips_cpu_tlb_fill;
 }
 
-MIPSCPU *cpu_mips_init(struct uc_struct *uc)
+MIPSCPU *cpu_mips_init(struct qc_struct *uc)
 {
     MIPSCPU *cpu;
     CPUState *cs;
@@ -165,7 +165,7 @@ MIPSCPU *cpu_mips_init(struct uc_struct *uc)
 #ifdef TARGET_MIPS64
     if (uc->cpu_model == INT_MAX) {
         uc->cpu_model = 17; // R4000
-    } else if (uc->cpu_model + UC_CPU_MIPS32_I7200 + 1 >= mips_defs_number ) {
+    } else if (uc->cpu_model + QC_CPU_MIPS32_I7200 + 1 >= mips_defs_number ) {
         free(cpu);
         return NULL;
     }

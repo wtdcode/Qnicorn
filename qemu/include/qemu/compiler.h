@@ -7,7 +7,7 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include "unicorn/platform.h"
+#include "qnicorn/platform.h"
 
 #ifndef glue
 #define xglue(x, y) x ## y

@@ -1836,7 +1836,7 @@
 #define x86_cpu_exec_interrupt x86_cpu_exec_interrupt_x86_64
 #define helper_lldt helper_lldt_x86_64
 #define helper_ltr helper_ltr_x86_64
-#define uc_check_cpu_x86_load_seg uc_check_cpu_x86_load_seg_x86_64
+#define qc_check_cpu_x86_load_seg qc_check_cpu_x86_load_seg_x86_64
 #define helper_load_seg helper_load_seg_x86_64
 #define helper_ljmp_protected helper_ljmp_protected_x86_64
 #define helper_lcall_real helper_lcall_real_x86_64

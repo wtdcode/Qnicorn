@@ -209,7 +209,7 @@ static void m68k_cpu_realizefn(CPUState *dev)
     cpu_exec_realizefn(cs);
 }
 
-static void m68k_cpu_initfn(struct uc_struct *uc, CPUState *obj)
+static void m68k_cpu_initfn(struct qc_struct *uc, CPUState *obj)
 {
     M68kCPU *cpu = M68K_CPU(obj);
     CPUM68KState *env = &cpu->env;
@@ -259,7 +259,7 @@ static struct M68kCPUInfo m68k_cpus_type_infos[] = {
     { "any", any_cpu_initfn },
 };
 
-M68kCPU *cpu_m68k_init(struct uc_struct *uc)
+M68kCPU *cpu_m68k_init(struct qc_struct *uc)
 {
     M68kCPU *cpu;
     CPUState *cs;

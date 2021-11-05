@@ -24,7 +24,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu/timer.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 #include "sysemu/cpus.h"
 #include "qemu/queue.h"
 

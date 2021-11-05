@@ -60,7 +60,7 @@
 #include "elf.h"
 #include "sysemu/sysemu.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 /* Forward declarations for functions declared in tcg-target.inc.c and
    used here. */

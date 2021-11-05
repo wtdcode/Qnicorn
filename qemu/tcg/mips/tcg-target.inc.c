@@ -1216,7 +1216,7 @@ static void tcg_out_tlb_load(TCGContext *s, TCGReg base, TCGReg addrl,
                              tcg_insn_unit *label_ptr[2], bool is_load)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
 #endif
     MemOp opc = get_memop(oi);
     unsigned s_bits = opc & MO_SIZE;

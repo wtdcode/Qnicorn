@@ -32,8 +32,8 @@ typedef struct MemoryRegionOps MemoryRegionOps;
 
 typedef struct IOMMUTLBEntry IOMMUTLBEntry;
 
-typedef uint64_t (*uc_cb_mmio_read_t)(struct uc_struct *uc, uint64_t addr, unsigned size, void *user_data);
-typedef void (*uc_cb_mmio_write_t)(struct uc_struct *uc, uint64_t addr, unsigned size, uint64_t data, void *user_data);
+typedef uint64_t (*qc_cb_mmio_read_t)(struct qc_struct *uc, uint64_t addr, unsigned size, void *user_data);
+typedef void (*qc_cb_mmio_write_t)(struct qc_struct *uc, uint64_t addr, unsigned size, uint64_t data, void *user_data);
 
 /* See address_space_translate: bit 0 is read, bit 1 is write.  */
 typedef enum {
@@ -123,25 +123,25 @@ static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
 struct MemoryRegionOps {
     /* Read from the memory region. @addr is relative to @mr; @size is
      * in bytes. */
-    uint64_t (*read)(struct uc_struct *uc,
+    uint64_t (*read)(struct qc_struct *uc,
                      void *opaque,
                      hwaddr addr,
                      unsigned size);
     /* Write to the memory region. @addr is relative to @mr; @size is
      * in bytes. */
-    void (*write)(struct uc_struct *uc,
+    void (*write)(struct qc_struct *uc,
                   void *opaque,
                   hwaddr addr,
                   uint64_t data,
                   unsigned size);
 
-    MemTxResult (*read_with_attrs)(struct uc_struct *uc, void *opaque,
+    MemTxResult (*read_with_attrs)(struct qc_struct *uc, void *opaque,
                                    hwaddr addr,
                                    uint64_t *data,
                                    unsigned size,
                                    MemTxAttrs attrs);
 
-    MemTxResult (*write_with_attrs)(struct uc_struct *, void *opaque,
+    MemTxResult (*write_with_attrs)(struct qc_struct *, void *opaque,
                                     hwaddr addr,
                                     uint64_t data,
                                     unsigned size,
@@ -164,7 +164,7 @@ struct MemoryRegionOps {
          * by the device (and results in machine dependent behaviour such
          * as a machine check exception).
          */
-        bool (*accepts)(struct uc_struct *uc, void *opaque, hwaddr addr,
+        bool (*accepts)(struct qc_struct *uc, void *opaque, hwaddr addr,
                         unsigned size, bool is_write,
                         MemTxAttrs attrs);
     } valid;
@@ -320,7 +320,7 @@ struct MemoryRegion {
     QTAILQ_HEAD(, MemoryRegion) subregions;
     QTAILQ_ENTRY(MemoryRegion) subregions_link;
 
-    struct uc_struct *uc;
+    struct qc_struct *uc;
     uint32_t perms;
     hwaddr end;
 };
@@ -429,7 +429,7 @@ struct AddressSpace {
     QTAILQ_HEAD(, MemoryListener) listeners;
     QTAILQ_ENTRY(AddressSpace) address_spaces_link;
 
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 typedef struct AddressSpaceDispatch AddressSpaceDispatch;
@@ -493,7 +493,7 @@ static inline bool MemoryRegionSection_eq(MemoryRegionSection *a,
  * @mr: the #MemoryRegion to be initialized
  * @size: size of the region; any subregions beyond this size will be clipped
  */
-void memory_region_init(struct uc_struct *uc,
+void memory_region_init(struct qc_struct *uc,
                         MemoryRegion *mr,
                         uint64_t size);
 
@@ -526,7 +526,7 @@ void memory_region_ref(MemoryRegion *mr);
  * @opaque: passed to the read and write callbacks of the @ops structure.
  * @size: size of the region.
  */
-void memory_region_init_io(struct uc_struct *uc,
+void memory_region_init_io(struct qc_struct *uc,
                            MemoryRegion *mr,
                            const MemoryRegionOps *ops,
                            void *opaque,
@@ -544,7 +544,7 @@ void memory_region_init_io(struct uc_struct *uc,
  * Note that this function does not do anything to cause the data in the
  * RAM memory region to be migrated; that is the responsibility of the caller.
  */
-void memory_region_init_ram_ptr(struct uc_struct *uc,
+void memory_region_init_ram_ptr(struct qc_struct *uc,
                                 MemoryRegion *mr,
                                 uint64_t size,
                                 void *ptr);
@@ -568,7 +568,7 @@ void memory_region_init_ram_ptr(struct uc_struct *uc,
  * We should lift this restriction and allow arbitrary Objects.
  * If you pass a non-NULL non-device @owner then we will assert.
  */
-void memory_region_init_ram(struct uc_struct *uc,
+void memory_region_init_ram(struct qc_struct *uc,
                             MemoryRegion *mr,
                             uint64_t size,
                             uint32_t perms);
@@ -640,7 +640,7 @@ static inline IOMMUMemoryRegionClass *memory_region_get_iommu_class_nocheck(
  * @ptr: the host pointer to be converted
  * @offset: the offset within memory region
  */
-MemoryRegion *memory_region_from_host(struct uc_struct *uc, void *ptr, ram_addr_t *offset);
+MemoryRegion *memory_region_from_host(struct qc_struct *uc, void *ptr, ram_addr_t *offset);
 
 /**
  * memory_region_set_readonly: Turn a memory region read-only (or read-write)
@@ -764,7 +764,7 @@ void memory_listener_unregister(MemoryListener *listener);
  * @op: size, sign, and endianness of the memory operation
  * @attrs: memory transaction attributes to use for the access
  */
-MemTxResult memory_region_dispatch_read(struct uc_struct *uc, MemoryRegion *mr,
+MemTxResult memory_region_dispatch_read(struct qc_struct *uc, MemoryRegion *mr,
                                         hwaddr addr,
                                         uint64_t *pval,
                                         MemOp op,
@@ -779,7 +779,7 @@ MemTxResult memory_region_dispatch_read(struct uc_struct *uc, MemoryRegion *mr,
  * @op: size, sign, and endianness of the memory operation
  * @attrs: memory transaction attributes to use for the access
  */
-MemTxResult memory_region_dispatch_write(struct uc_struct *uc, MemoryRegion *mr,
+MemTxResult memory_region_dispatch_write(struct qc_struct *uc, MemoryRegion *mr,
                                          hwaddr addr,
                                          uint64_t data,
                                          MemOp op,
@@ -791,7 +791,7 @@ MemTxResult memory_region_dispatch_write(struct uc_struct *uc, MemoryRegion *mr,
  * @as: an uninitialized #AddressSpace
  * @root: a #MemoryRegion that routes addresses for the address space
  */
-void address_space_init(struct uc_struct *uc, 
+void address_space_init(struct qc_struct *uc, 
                         AddressSpace *as,
                         MemoryRegion *root);
 
@@ -963,9 +963,9 @@ struct MemoryRegionCache {
 
 /* Inline fast path for direct RAM access.  */
 #ifdef UNICORN_ARCH_POSTFIX
-static inline uint8_t glue(address_space_ldub_cached, UNICORN_ARCH_POSTFIX)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline uint8_t glue(address_space_ldub_cached, UNICORN_ARCH_POSTFIX)(struct qc_struct *uc, MemoryRegionCache *cache,
 #else
-static inline uint8_t address_space_ldub_cached(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline uint8_t address_space_ldub_cached(struct qc_struct *uc, MemoryRegionCache *cache,
 #endif
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
@@ -982,9 +982,9 @@ static inline uint8_t address_space_ldub_cached(struct uc_struct *uc, MemoryRegi
 }
 
 #ifdef UNICORN_ARCH_POSTFIX
-static inline void glue(address_space_stb_cached, UNICORN_ARCH_POSTFIX)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline void glue(address_space_stb_cached, UNICORN_ARCH_POSTFIX)(struct qc_struct *uc, MemoryRegionCache *cache,
 #else
-static inline void address_space_stb_cached(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline void address_space_stb_cached(struct qc_struct *uc, MemoryRegionCache *cache,
 #endif
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
@@ -1028,7 +1028,7 @@ static inline void address_space_stb_cached(struct uc_struct *uc, MemoryRegionCa
  * @is_write: indicates the transfer direction
  * @attrs: memory attributes
  */
-MemoryRegion *flatview_translate(struct uc_struct *uc, FlatView *fv,
+MemoryRegion *flatview_translate(struct qc_struct *uc, FlatView *fv,
                                  hwaddr addr, hwaddr *xlat,
                                  hwaddr *len, bool is_write,
                                  MemTxAttrs attrs);
@@ -1096,11 +1096,11 @@ void address_space_unmap(AddressSpace *as, void *buffer, hwaddr len,
 /* Internal functions, part of the implementation of address_space_read.  */
 MemTxResult address_space_read_full(AddressSpace *as, hwaddr addr,
                                     MemTxAttrs attrs, void *buf, hwaddr len);
-MemTxResult flatview_read_continue(struct uc_struct *, FlatView *fv, hwaddr addr,
+MemTxResult flatview_read_continue(struct qc_struct *, FlatView *fv, hwaddr addr,
                                    MemTxAttrs attrs, void *buf,
                                    hwaddr len, hwaddr addr1, hwaddr l,
                                    MemoryRegion *mr);
-void *qemu_map_ram_ptr(struct uc_struct *uc, RAMBlock *ram_block, ram_addr_t addr);
+void *qemu_map_ram_ptr(struct qc_struct *uc, RAMBlock *ram_block, ram_addr_t addr);
 
 static inline bool memory_access_is_direct(MemoryRegion *mr, bool is_write)
 {
@@ -1182,11 +1182,11 @@ static inline MemOp devend_memop(enum device_endian end)
 }
 #endif
 
-MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms);
-MemoryRegion *memory_map_ptr(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms, void *ptr);
- MemoryRegion *memory_map_io(struct uc_struct *uc, ram_addr_t begin, size_t size, uc_cb_mmio_read_t read_cb,
-                             uc_cb_mmio_write_t write_cb, void *user_data_read, void *user_data_write);
-void memory_unmap(struct uc_struct *uc, MemoryRegion *mr);
-int memory_free(struct uc_struct *uc);
+MemoryRegion *memory_map(struct qc_struct *uc, hwaddr begin, size_t size, uint32_t perms);
+MemoryRegion *memory_map_ptr(struct qc_struct *uc, hwaddr begin, size_t size, uint32_t perms, void *ptr);
+ MemoryRegion *memory_map_io(struct qc_struct *uc, ram_addr_t begin, size_t size, qc_cb_mmio_read_t read_cb,
+                             qc_cb_mmio_write_t write_cb, void *user_data_read, void *user_data_write);
+void memory_unmap(struct qc_struct *uc, MemoryRegion *mr);
+int memory_free(struct qc_struct *uc);
 
 #endif

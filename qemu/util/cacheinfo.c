@@ -10,7 +10,7 @@
 #include "qemu/host-utils.h"
 #include "qemu/atomic.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 /*
  * Operating system specific detection mechanisms.
@@ -174,7 +174,7 @@ static void fallback_cache_info(int *isize, int *dsize)
     }
 }
 
-void init_cache_info(struct uc_struct *uc)
+void init_cache_info(struct qc_struct *uc)
 {
     int isize = 0, dsize = 0;
 

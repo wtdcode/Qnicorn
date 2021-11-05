@@ -24,14 +24,14 @@
 
 #include "sysemu/sysemu.h"
 #include "sysemu/cpus.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 
-void init_real_host_page_size(struct uc_struct *uc);
-void init_cache_info(struct uc_struct *uc);
+void init_real_host_page_size(struct qc_struct *uc);
+void init_cache_info(struct qc_struct *uc);
 
 
 DEFAULT_VISIBILITY
-int machine_initialize(struct uc_struct *uc)
+int machine_initialize(struct qc_struct *uc)
 {
     init_get_clock();
 
@@ -56,12 +56,12 @@ int machine_initialize(struct uc_struct *uc)
     return uc->cpus_init(uc, NULL);
 }
 
-void qemu_system_reset_request(struct uc_struct* uc)
+void qemu_system_reset_request(struct qc_struct* uc)
 {
     cpu_stop(uc);
 }
 
-void qemu_system_shutdown_request(struct uc_struct *uc)
+void qemu_system_shutdown_request(struct qc_struct *uc)
 {
     /* TODO: shutdown(exit program) immediately? */
     cpu_stop(uc);

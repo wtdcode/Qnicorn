@@ -43,7 +43,7 @@
 
 #include "qemu/range.h"
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 typedef struct PhysPageEntry PhysPageEntry;
 
@@ -82,7 +82,7 @@ struct AddressSpaceDispatch {
      */
     PhysPageEntry phys_map;
     PhysPageMap map;
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 #define SUBPAGE_IDX(addr) ((addr) & ~TARGET_PAGE_MASK)
@@ -172,7 +172,7 @@ static void phys_page_set(AddressSpaceDispatch *d,
                           uint16_t leaf)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = d->uc;
+    struct qc_struct *uc = d->uc;
 #endif
     /* Wildly overreserve - it doesn't matter much. */
     phys_map_node_reserve(d, &d->map, 3 * P_L2_LEVELS);
@@ -183,7 +183,7 @@ static void phys_page_set(AddressSpaceDispatch *d,
 /* Compact a non leaf page entry. Simply detect that the entry has a single child,
  * and update our entry so we can skip it and go directly to the destination.
  */
-static void phys_page_compact(struct uc_struct *uc, PhysPageEntry *lp, Node *nodes)
+static void phys_page_compact(struct qc_struct *uc, PhysPageEntry *lp, Node *nodes)
 {
     unsigned valid_ptr = P_L2_SIZE;
     int valid = 0;
@@ -255,7 +255,7 @@ static inline bool section_covers_addr(const MemoryRegionSection *section,
 static MemoryRegionSection *phys_page_find(AddressSpaceDispatch *d, hwaddr addr)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = d->uc;
+    struct qc_struct *uc = d->uc;
 #endif
     PhysPageEntry lp = d->phys_map, *p;
     Node *nodes = d->map.nodes;
@@ -284,7 +284,7 @@ static MemoryRegionSection *address_space_lookup_region(AddressSpaceDispatch *d,
                                                         bool resolve_subpage)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = d->uc;
+    struct qc_struct *uc = d->uc;
 #endif
     MemoryRegionSection *section = d->mru_section;
     subpage_t *subpage;
@@ -431,7 +431,7 @@ unassigned:
  *
  * This function is called from RCU critical section
  */
-static MemoryRegionSection flatview_do_translate(struct uc_struct *uc, FlatView *fv,
+static MemoryRegionSection flatview_do_translate(struct qc_struct *uc, FlatView *fv,
                                                  hwaddr addr,
                                                  hwaddr *xlat,
                                                  hwaddr *plen_out,
@@ -469,7 +469,7 @@ static MemoryRegionSection flatview_do_translate(struct uc_struct *uc, FlatView 
 }
 
 /* Called from RCU critical section */
-MemoryRegion *flatview_translate(struct uc_struct *uc, FlatView *fv, hwaddr addr, hwaddr *xlat,
+MemoryRegion *flatview_translate(struct qc_struct *uc, FlatView *fv, hwaddr addr, hwaddr *xlat,
                                  hwaddr *plen, bool is_write,
                                  MemTxAttrs attrs)
 {
@@ -554,7 +554,7 @@ translate_fail:
     return &d->map.sections[PHYS_SECTION_UNASSIGNED];
 }
 
-CPUState *qemu_get_cpu(struct uc_struct *uc, int index)
+CPUState *qemu_get_cpu(struct qc_struct *uc, int index)
 {
     CPUState *cpu = uc->cpu;
     if (cpu->cpu_index == index) {
@@ -782,7 +782,7 @@ void cpu_abort(CPUState *cpu, const char *fmt, ...)
 }
 
 /* Called from RCU critical section */
-static RAMBlock *qemu_get_ram_block(struct uc_struct *uc, ram_addr_t addr)
+static RAMBlock *qemu_get_ram_block(struct qc_struct *uc, ram_addr_t addr)
 {
     RAMBlock *block;
 
@@ -820,14 +820,14 @@ hwaddr memory_region_section_get_iotlb(CPUState *cpu,
     return section - d->map.sections;
 }
 
-static int subpage_register(struct uc_struct *uc, subpage_t *mmio, uint32_t start, uint32_t end,
+static int subpage_register(struct qc_struct *uc, subpage_t *mmio, uint32_t start, uint32_t end,
                             uint16_t section);
-static subpage_t *subpage_init(struct uc_struct *, FlatView *fv, hwaddr base);
+static subpage_t *subpage_init(struct qc_struct *, FlatView *fv, hwaddr base);
 
-static void *(*phys_mem_alloc)(struct uc_struct *uc, size_t size, uint64_t *align) =
+static void *(*phys_mem_alloc)(struct qc_struct *uc, size_t size, uint64_t *align) =
                                qemu_anon_ram_alloc;
 
-static uint16_t phys_section_add(struct uc_struct *uc, PhysPageMap *map,
+static uint16_t phys_section_add(struct qc_struct *uc, PhysPageMap *map,
                                  MemoryRegionSection *section)
 {
     /* The physical section number is ORed with a page-aligned
@@ -866,7 +866,7 @@ static void phys_sections_free(PhysPageMap *map)
     g_free(map->nodes);
 }
 
-static void register_subpage(struct uc_struct *uc, FlatView *fv, MemoryRegionSection *section)
+static void register_subpage(struct qc_struct *uc, FlatView *fv, MemoryRegionSection *section)
 {
     AddressSpaceDispatch *d = flatview_to_dispatch(fv);
     subpage_t *subpage;
@@ -897,7 +897,7 @@ static void register_subpage(struct uc_struct *uc, FlatView *fv, MemoryRegionSec
 }
 
 
-static void register_multipage(struct uc_struct *uc, FlatView *fv,
+static void register_multipage(struct qc_struct *uc, FlatView *fv,
                                MemoryRegionSection *section)
 {
     AddressSpaceDispatch *d = flatview_to_dispatch(fv);
@@ -917,7 +917,7 @@ static void register_multipage(struct uc_struct *uc, FlatView *fv,
  *
  * where s stands for subpage and P for page.
  */
-void flatview_add_to_dispatch(struct uc_struct *uc, FlatView *fv, MemoryRegionSection *section)
+void flatview_add_to_dispatch(struct qc_struct *uc, FlatView *fv, MemoryRegionSection *section)
 {
     MemoryRegionSection remain = *section;
     Int128 page_size = int128_make64(TARGET_PAGE_SIZE);
@@ -959,7 +959,7 @@ void flatview_add_to_dispatch(struct uc_struct *uc, FlatView *fv, MemoryRegionSe
  * dirty bitmaps.
  * Called with the ramlist lock held.
  */
-static ram_addr_t find_ram_offset(struct uc_struct *uc, ram_addr_t size)
+static ram_addr_t find_ram_offset(struct qc_struct *uc, ram_addr_t size)
 {
     RAMBlock *block, *next_block;
     ram_addr_t offset = RAM_ADDR_MAX, mingap = RAM_ADDR_MAX;
@@ -1032,7 +1032,7 @@ size_t qemu_ram_pagesize(RAMBlock *rb)
     return rb->page_size;
 }
 
-static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
+static void ram_block_add(struct qc_struct *uc, RAMBlock *new_block)
 {
     RAMBlock *block;
     RAMBlock *last_block = NULL;
@@ -1079,7 +1079,7 @@ static void ram_block_add(struct uc_struct *uc, RAMBlock *new_block)
 
 }
 
-RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *host,
+RAMBlock *qemu_ram_alloc_from_ptr(struct qc_struct *uc, ram_addr_t size, void *host,
                                    MemoryRegion *mr)
 {
     RAMBlock *new_block;
@@ -1104,12 +1104,12 @@ RAMBlock *qemu_ram_alloc_from_ptr(struct uc_struct *uc, ram_addr_t size, void *h
     return new_block;
 }
 
-RAMBlock *qemu_ram_alloc(struct uc_struct *uc, ram_addr_t size, MemoryRegion *mr)
+RAMBlock *qemu_ram_alloc(struct qc_struct *uc, ram_addr_t size, MemoryRegion *mr)
 {
     return qemu_ram_alloc_from_ptr(uc, size, NULL, mr);
 }
 
-static void reclaim_ramblock(struct uc_struct *uc, RAMBlock *block)
+static void reclaim_ramblock(struct qc_struct *uc, RAMBlock *block)
 {
     if (block->flags & RAM_PREALLOC) {
         ;
@@ -1120,7 +1120,7 @@ static void reclaim_ramblock(struct uc_struct *uc, RAMBlock *block)
     g_free(block);
 }
 
-void qemu_ram_free(struct uc_struct *uc, RAMBlock *block)
+void qemu_ram_free(struct qc_struct *uc, RAMBlock *block)
 {
     if (!block) {
         return;
@@ -1145,7 +1145,7 @@ void qemu_ram_free(struct uc_struct *uc, RAMBlock *block)
  *
  * Called within RCU critical section.
  */
-void *qemu_map_ram_ptr(struct uc_struct *uc, RAMBlock *ram_block, ram_addr_t addr)
+void *qemu_map_ram_ptr(struct qc_struct *uc, RAMBlock *ram_block, ram_addr_t addr)
 {
     RAMBlock *block = ram_block;
 
@@ -1162,7 +1162,7 @@ void *qemu_map_ram_ptr(struct uc_struct *uc, RAMBlock *ram_block, ram_addr_t add
  *
  * Called within RCU critical section.
  */
-static void *qemu_ram_ptr_length(struct uc_struct *uc, RAMBlock *ram_block, ram_addr_t addr,
+static void *qemu_ram_ptr_length(struct qc_struct *uc, RAMBlock *ram_block, ram_addr_t addr,
                                  hwaddr *size, bool lock)
 {
     RAMBlock *block = ram_block;
@@ -1206,7 +1206,7 @@ ram_addr_t qemu_ram_block_host_offset(RAMBlock *rb, void *host)
  * pointer, such as a reference to the region that includes the incoming
  * ram_addr_t.
  */
-RAMBlock *qemu_ram_block_from_host(struct uc_struct *uc, void *ptr,
+RAMBlock *qemu_ram_block_from_host(struct qc_struct *uc, void *ptr,
                                    bool round_offset, ram_addr_t *offset)
 {
     RAMBlock *block;
@@ -1239,7 +1239,7 @@ found:
 
 /* Some of the softmmu routines need to translate from a host pointer
    (typically a TLB entry) back to a ram offset.  */
-ram_addr_t qemu_ram_addr_from_host(struct uc_struct *uc, void *ptr)
+ram_addr_t qemu_ram_addr_from_host(struct qc_struct *uc, void *ptr)
 {
     RAMBlock *block;
     ram_addr_t offset;
@@ -1258,14 +1258,14 @@ void cpu_check_watchpoint(CPUState *cpu, vaddr addr, vaddr len,
 {
 }
 
-static MemTxResult flatview_read(struct uc_struct *uc, FlatView *fv, hwaddr addr,
+static MemTxResult flatview_read(struct qc_struct *uc, FlatView *fv, hwaddr addr,
                                  MemTxAttrs attrs, void *buf, hwaddr len);
-static MemTxResult flatview_write(struct uc_struct *, FlatView *fv, hwaddr addr, MemTxAttrs attrs,
+static MemTxResult flatview_write(struct qc_struct *, FlatView *fv, hwaddr addr, MemTxAttrs attrs,
                                   const void *buf, hwaddr len);
-static bool flatview_access_valid(struct uc_struct *uc, FlatView *fv, hwaddr addr, hwaddr len,
+static bool flatview_access_valid(struct qc_struct *uc, FlatView *fv, hwaddr addr, hwaddr len,
                                   bool is_write, MemTxAttrs attrs);
 
-static MemTxResult subpage_read(struct uc_struct *uc, void *opaque, hwaddr addr, uint64_t *data,
+static MemTxResult subpage_read(struct qc_struct *uc, void *opaque, hwaddr addr, uint64_t *data,
                                 unsigned len, MemTxAttrs attrs)
 {
     subpage_t *subpage = opaque;
@@ -1284,7 +1284,7 @@ static MemTxResult subpage_read(struct uc_struct *uc, void *opaque, hwaddr addr,
     return MEMTX_OK;
 }
 
-static MemTxResult subpage_write(struct uc_struct *uc, void *opaque, hwaddr addr,
+static MemTxResult subpage_write(struct qc_struct *uc, void *opaque, hwaddr addr,
                                  uint64_t value, unsigned len, MemTxAttrs attrs)
 {
     subpage_t *subpage = opaque;
@@ -1299,7 +1299,7 @@ static MemTxResult subpage_write(struct uc_struct *uc, void *opaque, hwaddr addr
     return flatview_write(uc, subpage->fv, addr + subpage->base, attrs, buf, len);
 }
 
-static bool subpage_accepts(struct uc_struct *uc, void *opaque, hwaddr addr,
+static bool subpage_accepts(struct qc_struct *uc, void *opaque, hwaddr addr,
                             unsigned len, bool is_write,
                             MemTxAttrs attrs)
 {
@@ -1324,7 +1324,7 @@ static const MemoryRegionOps subpage_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-static int subpage_register(struct uc_struct *uc, subpage_t *mmio, uint32_t start, uint32_t end,
+static int subpage_register(struct qc_struct *uc, subpage_t *mmio, uint32_t start, uint32_t end,
                             uint16_t section)
 {
     int idx, eidx;
@@ -1344,7 +1344,7 @@ static int subpage_register(struct uc_struct *uc, subpage_t *mmio, uint32_t star
     return 0;
 }
 
-static subpage_t *subpage_init(struct uc_struct *uc, FlatView *fv, hwaddr base)
+static subpage_t *subpage_init(struct qc_struct *uc, FlatView *fv, hwaddr base)
 {
     subpage_t *mmio;
 
@@ -1363,7 +1363,7 @@ static subpage_t *subpage_init(struct uc_struct *uc, FlatView *fv, hwaddr base)
     return mmio;
 }
 
-static uint16_t dummy_section(struct uc_struct *uc, PhysPageMap *map, FlatView *fv, MemoryRegion *mr)
+static uint16_t dummy_section(struct qc_struct *uc, PhysPageMap *map, FlatView *fv, MemoryRegion *mr)
 {
     assert(fv);
     MemoryRegionSection section = {
@@ -1381,7 +1381,7 @@ MemoryRegionSection *iotlb_to_section(CPUState *cpu,
                                       hwaddr index, MemTxAttrs attrs)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
     int asidx = cpu_asidx_from_attrs(cpu, attrs);
     CPUAddressSpace *cpuas = &cpu->cpu_ases[asidx];
@@ -1391,13 +1391,13 @@ MemoryRegionSection *iotlb_to_section(CPUState *cpu,
     return &sections[index & ~TARGET_PAGE_MASK];
 }
 
-static void io_mem_init(struct uc_struct *uc)
+static void io_mem_init(struct qc_struct *uc)
 {
     memory_region_init_io(uc, &uc->io_mem_unassigned, &unassigned_mem_ops, NULL,
                           UINT64_MAX);
 }
 
-AddressSpaceDispatch *address_space_dispatch_new(struct uc_struct *uc, FlatView *fv)
+AddressSpaceDispatch *address_space_dispatch_new(struct qc_struct *uc, FlatView *fv)
 {
     AddressSpaceDispatch *d = g_new0(AddressSpaceDispatch, 1);
 #ifndef NDEBUG
@@ -1439,7 +1439,7 @@ static void tcg_commit(MemoryListener *listener)
     tlb_flush(cpuas->cpu);
 }
 
-static void memory_map_init(struct uc_struct *uc)
+static void memory_map_init(struct qc_struct *uc)
 {
     uc->system_memory = g_malloc(sizeof(*(uc->system_memory)));
     memory_region_init(uc, uc->system_memory, UINT64_MAX);
@@ -1493,7 +1493,7 @@ static bool prepare_mmio_access(MemoryRegion *mr)
 }
 
 /* Called within RCU critical section.  */
-static MemTxResult flatview_write_continue(struct uc_struct *uc, FlatView *fv, hwaddr addr,
+static MemTxResult flatview_write_continue(struct qc_struct *uc, FlatView *fv, hwaddr addr,
                                            MemTxAttrs attrs,
                                            const void *ptr,
                                            hwaddr len, hwaddr addr1,
@@ -1540,7 +1540,7 @@ static MemTxResult flatview_write_continue(struct uc_struct *uc, FlatView *fv, h
 }
 
 /* Called from RCU critical section.  */
-static MemTxResult flatview_write(struct uc_struct *uc, FlatView *fv, hwaddr addr, MemTxAttrs attrs,
+static MemTxResult flatview_write(struct qc_struct *uc, FlatView *fv, hwaddr addr, MemTxAttrs attrs,
                                   const void *buf, hwaddr len)
 {
     hwaddr l;
@@ -1557,7 +1557,7 @@ static MemTxResult flatview_write(struct uc_struct *uc, FlatView *fv, hwaddr add
 }
 
 /* Called within RCU critical section.  */
-MemTxResult flatview_read_continue(struct uc_struct *uc, FlatView *fv, hwaddr addr,
+MemTxResult flatview_read_continue(struct qc_struct *uc, FlatView *fv, hwaddr addr,
                                    MemTxAttrs attrs, void *ptr,
                                    hwaddr len, hwaddr addr1, hwaddr l,
                                    MemoryRegion *mr)
@@ -1602,7 +1602,7 @@ MemTxResult flatview_read_continue(struct uc_struct *uc, FlatView *fv, hwaddr ad
 }
 
 /* Called from RCU critical section.  */
-static MemTxResult flatview_read(struct uc_struct *uc, FlatView *fv, hwaddr addr,
+static MemTxResult flatview_read(struct qc_struct *uc, FlatView *fv, hwaddr addr,
                                  MemTxAttrs attrs, void *buf, hwaddr len)
 {
     hwaddr l;
@@ -1722,7 +1722,7 @@ void cpu_flush_icache_range(AddressSpace *as, hwaddr start, hwaddr len)
 {
 }
 
-void cpu_exec_init_all(struct uc_struct *uc)
+void cpu_exec_init_all(struct qc_struct *uc)
 {
     /* The data structures we set up here depend on knowing the page size,
      * so no more changes can be made after this point.
@@ -1736,7 +1736,7 @@ void cpu_exec_init_all(struct uc_struct *uc)
     io_mem_init(uc);
 }
 
-static bool flatview_access_valid(struct uc_struct *uc, FlatView *fv, hwaddr addr, hwaddr len,
+static bool flatview_access_valid(struct qc_struct *uc, FlatView *fv, hwaddr addr, hwaddr len,
                                   bool is_write, MemTxAttrs attrs)
 {
     MemoryRegion *mr;
@@ -1771,7 +1771,7 @@ bool address_space_access_valid(AddressSpace *as, hwaddr addr,
 }
 
 static hwaddr
-flatview_extend_translation(struct uc_struct *uc, FlatView *fv, hwaddr addr,
+flatview_extend_translation(struct qc_struct *uc, FlatView *fv, hwaddr addr,
                             hwaddr target_len,
                             MemoryRegion *mr, hwaddr base, hwaddr len,
                             bool is_write, MemTxAttrs attrs)
@@ -1815,7 +1815,7 @@ void *address_space_map(AddressSpace *as,
     MemoryRegion *mr;
     void *ptr;
     FlatView *fv;
-    struct uc_struct *uc = as->uc;
+    struct qc_struct *uc = as->uc;
 
     if (len == 0) {
         return NULL;
@@ -1945,7 +1945,7 @@ int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
                         void *ptr, target_ulong len, bool is_write)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
     hwaddr phys_addr;
     target_ulong l, page;
@@ -1983,12 +1983,12 @@ int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
  * Allows code that needs to deal with migration bitmaps etc to still be built
  * target independent.
  */
-size_t qemu_target_page_size(struct uc_struct *uc)
+size_t qemu_target_page_size(struct qc_struct *uc)
 {
     return TARGET_PAGE_SIZE;
 }
 
-int qemu_target_page_bits(struct uc_struct *uc)
+int qemu_target_page_bits(struct qc_struct *uc)
 {
     return TARGET_PAGE_BITS;
 }
@@ -2029,7 +2029,7 @@ bool cpu_physical_memory_is_io(AddressSpace *as, hwaddr phys_addr)
  * Returns: 0 on success, none-0 on failure
  *
  */
-int ram_block_discard_range(struct uc_struct *uc, RAMBlock *rb, uint64_t start, size_t length)
+int ram_block_discard_range(struct qc_struct *uc, RAMBlock *rb, uint64_t start, size_t length)
 {
     int ret = -1;
 
@@ -2094,7 +2094,7 @@ bool ramblock_is_pmem(RAMBlock *rb)
     return rb->flags & RAM_PMEM;
 }
 
-void page_size_init(struct uc_struct *uc)
+void page_size_init(struct qc_struct *uc)
 {
     /* NOTE: we can always suppose that qemu_host_page_size >=
        TARGET_PAGE_SIZE */

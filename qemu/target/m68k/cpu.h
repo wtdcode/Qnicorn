@@ -148,7 +148,7 @@ typedef struct CPUM68KState {
     uint32_t features;
 
     // Unicorn engine
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 } CPUM68KState;
 
 /*
@@ -173,7 +173,7 @@ void m68k_cpu_do_interrupt(CPUState *cpu);
 bool m68k_cpu_exec_interrupt(CPUState *cpu, int int_req);
 hwaddr m68k_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
 
-void m68k_tcg_init(struct uc_struct *uc);
+void m68k_tcg_init(struct qc_struct *uc);
 /*
  * you can call this signal handler from your SIGBUS and SIGSEGV
  * signal handlers to inform the virtual CPU of exceptions. non zero
@@ -558,6 +558,6 @@ static inline void cpu_get_tb_cpu_state(CPUM68KState *env, target_ulong *pc,
     }
 }
 
-// M68kCPU *cpu_m68k_init(struct uc_struct *uc, const char *cpu_model);
+// M68kCPU *cpu_m68k_init(struct qc_struct *uc, const char *cpu_model);
 
 #endif

@@ -552,7 +552,7 @@ struct CPUSPARCState {
     void (*qemu_irq_ack)(CPUSPARCState *env, void *irq_manager, int intno);
 
     // Unicorn engine
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 /**
@@ -602,7 +602,7 @@ int sparc_cpu_memory_rw_debug(CPUState *cpu, vaddr addr,
 
 
 /* translate.c */
-void sparc_tcg_init(struct uc_struct *uc);
+void sparc_tcg_init(struct qc_struct *uc);
 
 /* cpu-exec.c */
 
@@ -815,6 +815,6 @@ static inline bool tb_am_enabled(int tb_flags)
 #endif
 }
 
-SPARCCPU *cpu_sparc_init(struct uc_struct *uc);
+SPARCCPU *cpu_sparc_init(struct qc_struct *uc);
 
 #endif

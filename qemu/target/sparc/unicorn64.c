@@ -5,12 +5,12 @@
 #include "sysemu/cpus.h"
 #include "cpu.h"
 #include "unicorn_common.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 #include "unicorn.h"
 
 const int SPARC64_REGS_STORAGE_SIZE = offsetof(CPUSPARCState, irq_manager);
 
-static bool sparc_stop_interrupt(struct uc_struct *uc, int intno)
+static bool sparc_stop_interrupt(struct qc_struct *uc, int intno)
 {
     switch(intno) {
         default:
@@ -20,7 +20,7 @@ static bool sparc_stop_interrupt(struct uc_struct *uc, int intno)
     }
 }
 
-static void sparc_set_pc(struct uc_struct *uc, uint64_t address)
+static void sparc_set_pc(struct qc_struct *uc, uint64_t address)
 {
     ((CPUSPARCState *)uc->cpu->env_ptr)->pc = address;
     ((CPUSPARCState *)uc->cpu->env_ptr)->npc = address + 4;
@@ -65,7 +65,7 @@ static void sparc_release(void *ctx)
 #endif
 }
 
-void sparc_reg_reset(struct uc_struct *uc)
+void sparc_reg_reset(struct qc_struct *uc)
 {
     CPUArchState *env = uc->cpu->env_ptr;
 
@@ -80,18 +80,18 @@ void sparc_reg_reset(struct uc_struct *uc)
 
 static void reg_read(CPUSPARCState *env, unsigned int regid, void *value)
 {
-    if (regid >= UC_SPARC_REG_G0 && regid <= UC_SPARC_REG_G7)
-        *(int64_t *)value = env->gregs[regid - UC_SPARC_REG_G0];
-    else if (regid >= UC_SPARC_REG_O0 && regid <= UC_SPARC_REG_O7)
-        *(int64_t *)value = env->regwptr[regid - UC_SPARC_REG_O0];
-    else if (regid >= UC_SPARC_REG_L0 && regid <= UC_SPARC_REG_L7)
-        *(int64_t *)value = env->regwptr[8 + regid - UC_SPARC_REG_L0];
-    else if (regid >= UC_SPARC_REG_I0 && regid <= UC_SPARC_REG_I7)
-        *(int64_t *)value = env->regwptr[16 + regid - UC_SPARC_REG_I0];
+    if (regid >= QC_SPARC_REG_G0 && regid <= QC_SPARC_REG_G7)
+        *(int64_t *)value = env->gregs[regid - QC_SPARC_REG_G0];
+    else if (regid >= QC_SPARC_REG_O0 && regid <= QC_SPARC_REG_O7)
+        *(int64_t *)value = env->regwptr[regid - QC_SPARC_REG_O0];
+    else if (regid >= QC_SPARC_REG_L0 && regid <= QC_SPARC_REG_L7)
+        *(int64_t *)value = env->regwptr[8 + regid - QC_SPARC_REG_L0];
+    else if (regid >= QC_SPARC_REG_I0 && regid <= QC_SPARC_REG_I7)
+        *(int64_t *)value = env->regwptr[16 + regid - QC_SPARC_REG_I0];
     else {
         switch(regid) {
             default: break;
-            case UC_SPARC_REG_PC:
+            case QC_SPARC_REG_PC:
                 *(int64_t *)value = env->pc;
                 break;
         }
@@ -100,18 +100,18 @@ static void reg_read(CPUSPARCState *env, unsigned int regid, void *value)
 
 static void reg_write(CPUSPARCState *env, unsigned int regid, const void *value)
 {
-    if (regid >= UC_SPARC_REG_G0 && regid <= UC_SPARC_REG_G7)
-        env->gregs[regid - UC_SPARC_REG_G0] = *(uint64_t *)value;
-    else if (regid >= UC_SPARC_REG_O0 && regid <= UC_SPARC_REG_O7)
-        env->regwptr[regid - UC_SPARC_REG_O0] = *(uint64_t *)value;
-    else if (regid >= UC_SPARC_REG_L0 && regid <= UC_SPARC_REG_L7)
-        env->regwptr[8 + regid - UC_SPARC_REG_L0] = *(uint64_t *)value;
-    else if (regid >= UC_SPARC_REG_I0 && regid <= UC_SPARC_REG_I7)
-        env->regwptr[16 + regid - UC_SPARC_REG_I0] = *(uint64_t *)value;
+    if (regid >= QC_SPARC_REG_G0 && regid <= QC_SPARC_REG_G7)
+        env->gregs[regid - QC_SPARC_REG_G0] = *(uint64_t *)value;
+    else if (regid >= QC_SPARC_REG_O0 && regid <= QC_SPARC_REG_O7)
+        env->regwptr[regid - QC_SPARC_REG_O0] = *(uint64_t *)value;
+    else if (regid >= QC_SPARC_REG_L0 && regid <= QC_SPARC_REG_L7)
+        env->regwptr[8 + regid - QC_SPARC_REG_L0] = *(uint64_t *)value;
+    else if (regid >= QC_SPARC_REG_I0 && regid <= QC_SPARC_REG_I7)
+        env->regwptr[16 + regid - QC_SPARC_REG_I0] = *(uint64_t *)value;
     else {
         switch(regid) {
             default: break;
-            case UC_SPARC_REG_PC:
+            case QC_SPARC_REG_PC:
                     env->pc = *(uint64_t *)value;
                     env->npc = *(uint64_t *)value + 4;
                     break;
@@ -119,7 +119,7 @@ static void reg_write(CPUSPARCState *env, unsigned int regid, const void *value)
     }
 }
 
-int sparc_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int count)
+int sparc_reg_read(struct qc_struct *uc, unsigned int *regs, void **vals, int count)
 {
     CPUSPARCState *env = &(SPARC_CPU(uc->cpu)->env);
     int i;
@@ -133,7 +133,7 @@ int sparc_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int co
     return 0;
 }
 
-int sparc_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals, int count)
+int sparc_reg_write(struct qc_struct *uc, unsigned int *regs, void* const* vals, int count)
 {
     CPUSPARCState *env = &(SPARC_CPU(uc->cpu)->env);
     int i;
@@ -148,7 +148,7 @@ int sparc_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals,
 }
 
 DEFAULT_VISIBILITY
-int sparc64_context_reg_read(struct uc_context *ctx, unsigned int *regs, void **vals, int count)
+int sparc64_context_reg_read(struct qc_context *ctx, unsigned int *regs, void **vals, int count)
 {
     CPUSPARCState *env = (CPUSPARCState *)ctx->data;
     int i;
@@ -163,7 +163,7 @@ int sparc64_context_reg_read(struct uc_context *ctx, unsigned int *regs, void **
 }
 
 DEFAULT_VISIBILITY
-int sparc64_context_reg_write(struct uc_context *ctx, unsigned int *regs, void *const *vals, int count)
+int sparc64_context_reg_write(struct qc_context *ctx, unsigned int *regs, void *const *vals, int count)
 {
     CPUSPARCState *env = (CPUSPARCState *)ctx->data;
     int i;
@@ -177,7 +177,7 @@ int sparc64_context_reg_write(struct uc_context *ctx, unsigned int *regs, void *
     return 0;
 }
 
-static int sparc_cpus_init(struct uc_struct *uc, const char *cpu_model)
+static int sparc_cpus_init(struct qc_struct *uc, const char *cpu_model)
 {
     SPARCCPU *cpu;
 
@@ -189,7 +189,7 @@ static int sparc_cpus_init(struct uc_struct *uc, const char *cpu_model)
 }
 
 DEFAULT_VISIBILITY
-void sparc64_uc_init(struct uc_struct* uc)
+void sparc64_qc_init(struct qc_struct* uc)
 {
     uc->release = sparc_release;
     uc->reg_read = sparc_reg_read;
@@ -198,5 +198,5 @@ void sparc64_uc_init(struct uc_struct* uc)
     uc->set_pc = sparc_set_pc;
     uc->stop_interrupt = sparc_stop_interrupt;
     uc->cpus_init = sparc_cpus_init;
-    uc_common_init(uc);
+    qc_common_init(uc);
 }

@@ -33,7 +33,7 @@
     glue(glue(ld, size), glue(ENDIANNESS, _p))
 #endif
 
-static inline uint32_t ADDRESS_SPACE_LD_CACHED(l)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline uint32_t ADDRESS_SPACE_LD_CACHED(l)(struct qc_struct *uc, MemoryRegionCache *cache,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     assert(addr < cache->len && 4 <= cache->len - addr);
@@ -44,7 +44,7 @@ static inline uint32_t ADDRESS_SPACE_LD_CACHED(l)(struct uc_struct *uc, MemoryRe
     }
 }
 
-static inline uint64_t ADDRESS_SPACE_LD_CACHED(q)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline uint64_t ADDRESS_SPACE_LD_CACHED(q)(struct qc_struct *uc, MemoryRegionCache *cache,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     assert(addr < cache->len && 8 <= cache->len - addr);
@@ -55,7 +55,7 @@ static inline uint64_t ADDRESS_SPACE_LD_CACHED(q)(struct uc_struct *uc, MemoryRe
     }
 }
 
-static inline uint32_t ADDRESS_SPACE_LD_CACHED(uw)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline uint32_t ADDRESS_SPACE_LD_CACHED(uw)(struct qc_struct *uc, MemoryRegionCache *cache,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     assert(addr < cache->len && 2 <= cache->len - addr);
@@ -86,7 +86,7 @@ static inline uint32_t ADDRESS_SPACE_LD_CACHED(uw)(struct uc_struct *uc, MemoryR
     glue(glue(st, size), glue(ENDIANNESS, _p))
 #endif
 
-static inline void ADDRESS_SPACE_ST_CACHED(l)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline void ADDRESS_SPACE_ST_CACHED(l)(struct qc_struct *uc, MemoryRegionCache *cache,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     assert(addr < cache->len && 4 <= cache->len - addr);
@@ -97,7 +97,7 @@ static inline void ADDRESS_SPACE_ST_CACHED(l)(struct uc_struct *uc, MemoryRegion
     }
 }
 
-static inline void ADDRESS_SPACE_ST_CACHED(w)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline void ADDRESS_SPACE_ST_CACHED(w)(struct qc_struct *uc, MemoryRegionCache *cache,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     assert(addr < cache->len && 2 <= cache->len - addr);
@@ -108,7 +108,7 @@ static inline void ADDRESS_SPACE_ST_CACHED(w)(struct uc_struct *uc, MemoryRegion
     }
 }
 
-static inline void ADDRESS_SPACE_ST_CACHED(q)(struct uc_struct *uc, MemoryRegionCache *cache,
+static inline void ADDRESS_SPACE_ST_CACHED(q)(struct qc_struct *uc, MemoryRegionCache *cache,
     hwaddr addr, uint64_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     assert(addr < cache->len && 8 <= cache->len - addr);

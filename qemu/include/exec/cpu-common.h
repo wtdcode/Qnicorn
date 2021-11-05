@@ -10,7 +10,7 @@ void qemu_init_cpu_list(void);
 void cpu_list_lock(void);
 void cpu_list_unlock(void);
 
-void tcg_flush_softmmu_tlb(struct uc_struct *uc);
+void tcg_flush_softmmu_tlb(struct qc_struct *uc);
 
 enum device_endian {
     DEVICE_NATIVE_ENDIAN,
@@ -35,8 +35,8 @@ typedef void CPUWriteMemoryFunc(void *opaque, hwaddr addr, uint32_t value);
 typedef uint32_t CPUReadMemoryFunc(void *opaque, hwaddr addr);
 
 /* This should not be used by devices.  */
-ram_addr_t qemu_ram_addr_from_host(struct uc_struct *uc, void *ptr);
-RAMBlock *qemu_ram_block_from_host(struct uc_struct *uc, void *ptr,
+ram_addr_t qemu_ram_addr_from_host(struct qc_struct *uc, void *ptr);
+RAMBlock *qemu_ram_block_from_host(struct qc_struct *uc, void *ptr,
                                    bool round_offset, ram_addr_t *offset);
 ram_addr_t qemu_ram_block_host_offset(RAMBlock *rb, void *host);
 void *qemu_ram_get_host_addr(RAMBlock *rb);
@@ -69,6 +69,6 @@ bool cpu_physical_memory_is_io(AddressSpace *as, hwaddr phys_addr);
 
 void cpu_flush_icache_range(AddressSpace *as, hwaddr start, hwaddr len);
 
-int ram_block_discard_range(struct uc_struct *uc, RAMBlock *rb, uint64_t start, size_t length);
+int ram_block_discard_range(struct qc_struct *uc, RAMBlock *rb, uint64_t start, size_t length);
 
 #endif /* CPU_COMMON_H */

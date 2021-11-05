@@ -22,7 +22,7 @@
 #include "exec/ram_addr.h"
 #include "sysemu/tcg.h"
 #include "exec/exec-all.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 //#define DEBUG_UNASSIGNED
 
@@ -38,7 +38,7 @@ struct AddrRange {
 };
 
 // Unicorn engine
-MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms)
+MemoryRegion *memory_map(struct qc_struct *uc, hwaddr begin, size_t size, uint32_t perms)
 {
     MemoryRegion *ram = g_new(MemoryRegion, 1);
 
@@ -57,7 +57,7 @@ MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32
     return ram;
 }
 
-MemoryRegion *memory_map_ptr(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms, void *ptr)
+MemoryRegion *memory_map_ptr(struct qc_struct *uc, hwaddr begin, size_t size, uint32_t perms, void *ptr)
 {
     MemoryRegion *ram = g_new(MemoryRegion, 1);
 
@@ -78,13 +78,13 @@ MemoryRegion *memory_map_ptr(struct uc_struct *uc, hwaddr begin, size_t size, ui
 }
 
 typedef struct _mmio_cbs {
-    uc_cb_mmio_read_t read;
+    qc_cb_mmio_read_t read;
     void *user_data_read;
-    uc_cb_mmio_write_t write;
+    qc_cb_mmio_write_t write;
     void *user_data_write;
 } mmio_cbs;
 
-static uint64_t mmio_read_wrapper(struct uc_struct *uc, void *opaque, hwaddr addr, unsigned size)
+static uint64_t mmio_read_wrapper(struct qc_struct *uc, void *opaque, hwaddr addr, unsigned size)
 {
     mmio_cbs* cbs = (mmio_cbs*)opaque;
     
@@ -95,7 +95,7 @@ static uint64_t mmio_read_wrapper(struct uc_struct *uc, void *opaque, hwaddr add
     }
 }
 
-static void mmio_write_wrapper(struct uc_struct *uc, void *opaque, hwaddr addr, uint64_t data, unsigned size)
+static void mmio_write_wrapper(struct qc_struct *uc, void *opaque, hwaddr addr, uint64_t data, unsigned size)
 {
     mmio_cbs* cbs = (mmio_cbs*)opaque;
     
@@ -109,8 +109,8 @@ static void mmio_region_destructor_uc(MemoryRegion *mr)
     g_free(mr->opaque);
 }
 
-MemoryRegion *memory_map_io(struct uc_struct *uc, ram_addr_t begin, size_t size,
-                            uc_cb_mmio_read_t read_cb, uc_cb_mmio_write_t write_cb,
+MemoryRegion *memory_map_io(struct qc_struct *uc, ram_addr_t begin, size_t size,
+                            qc_cb_mmio_read_t read_cb, qc_cb_mmio_write_t write_cb,
                             void *user_data_read, void *user_data_write)
 {
     MemoryRegion *mmio = g_new(MemoryRegion, 1);
@@ -134,10 +134,10 @@ MemoryRegion *memory_map_io(struct uc_struct *uc, ram_addr_t begin, size_t size,
     mmio->perms = 0;
 
     if (read_cb)
-        mmio->perms |= UC_PROT_READ;
+        mmio->perms |= QC_PROT_READ;
 
     if (write_cb)
-        mmio->perms |= UC_PROT_WRITE;
+        mmio->perms |= QC_PROT_WRITE;
 
     memory_region_add_subregion(uc->system_memory, begin, mmio);
 
@@ -147,7 +147,7 @@ MemoryRegion *memory_map_io(struct uc_struct *uc, ram_addr_t begin, size_t size,
     return mmio;
 }
 
-void memory_unmap(struct uc_struct *uc, MemoryRegion *mr)
+void memory_unmap(struct qc_struct *uc, MemoryRegion *mr)
 {
     int i;
     hwaddr addr;
@@ -173,7 +173,7 @@ void memory_unmap(struct uc_struct *uc, MemoryRegion *mr)
     }
 }
 
-int memory_free(struct uc_struct *uc)
+int memory_free(struct qc_struct *uc)
 {
     MemoryRegion *mr;
     int i;
@@ -450,7 +450,7 @@ static inline uint64_t memory_region_shift_write_access(uint64_t *value,
     return tmp;
 }
 
-static MemTxResult  memory_region_read_accessor(struct uc_struct *uc, MemoryRegion *mr,
+static MemTxResult  memory_region_read_accessor(struct qc_struct *uc, MemoryRegion *mr,
                                                 hwaddr addr,
                                                 uint64_t *value,
                                                 unsigned size,
@@ -465,7 +465,7 @@ static MemTxResult  memory_region_read_accessor(struct uc_struct *uc, MemoryRegi
     return MEMTX_OK;
 }
 
-static MemTxResult memory_region_read_with_attrs_accessor(struct uc_struct *uc, MemoryRegion *mr,
+static MemTxResult memory_region_read_with_attrs_accessor(struct qc_struct *uc, MemoryRegion *mr,
                                                           hwaddr addr,
                                                           uint64_t *value,
                                                           unsigned size,
@@ -481,7 +481,7 @@ static MemTxResult memory_region_read_with_attrs_accessor(struct uc_struct *uc, 
     return r;
 }
 
-static MemTxResult memory_region_write_accessor(struct uc_struct *uc, MemoryRegion *mr,
+static MemTxResult memory_region_write_accessor(struct qc_struct *uc, MemoryRegion *mr,
                                                 hwaddr addr,
                                                 uint64_t *value,
                                                 unsigned size,
@@ -495,7 +495,7 @@ static MemTxResult memory_region_write_accessor(struct uc_struct *uc, MemoryRegi
     return MEMTX_OK;
 }
 
-static MemTxResult memory_region_write_with_attrs_accessor(struct uc_struct *uc, MemoryRegion *mr,
+static MemTxResult memory_region_write_with_attrs_accessor(struct qc_struct *uc, MemoryRegion *mr,
                                                            hwaddr addr,
                                                            uint64_t *value,
                                                            unsigned size,
@@ -508,13 +508,13 @@ static MemTxResult memory_region_write_with_attrs_accessor(struct uc_struct *uc,
     return mr->ops->write_with_attrs(uc, mr->opaque, addr, tmp, size, attrs);
 }
 
-static MemTxResult access_with_adjusted_size(struct uc_struct *uc, hwaddr addr,
+static MemTxResult access_with_adjusted_size(struct qc_struct *uc, hwaddr addr,
                                       uint64_t *value,
                                       unsigned size,
                                       unsigned access_size_min,
                                       unsigned access_size_max,
                                       MemTxResult (*access_fn)
-                                                  (struct uc_struct *uc,
+                                                  (struct qc_struct *uc,
                                                    MemoryRegion *mr,
                                                    hwaddr addr,
                                                    uint64_t *value,
@@ -684,7 +684,7 @@ static MemoryRegion *memory_region_get_flatview_root(MemoryRegion *mr)
 }
 
 /* Render a memory topology into a list of disjoint absolute ranges. */
-static FlatView *generate_memory_topology(struct uc_struct *uc, MemoryRegion *mr)
+static FlatView *generate_memory_topology(struct qc_struct *uc, MemoryRegion *mr)
 {
     int i;
     FlatView *view;
@@ -784,7 +784,7 @@ static void address_space_update_topology_pass(AddressSpace *as,
     }
 }
 
-static void flatviews_init(struct uc_struct *uc)
+static void flatviews_init(struct qc_struct *uc)
 {
     static FlatView *empty_view;
 
@@ -805,7 +805,7 @@ static void flatviews_init(struct uc_struct *uc)
     }
 }
 
-static void flatviews_reset(struct uc_struct *uc)
+static void flatviews_reset(struct qc_struct *uc)
 {
     AddressSpace *as;
 
@@ -897,7 +897,7 @@ static void memory_region_destructor_ram(MemoryRegion *mr)
     qemu_ram_free(mr->uc, mr->ram_block);
 }
 
-void memory_region_init(struct uc_struct *uc,
+void memory_region_init(struct qc_struct *uc,
                         MemoryRegion *mr,
                         uint64_t size)
 {
@@ -932,7 +932,7 @@ static void unassigned_mem_write(void *opaque, hwaddr addr,
 #endif
 }
 
-static bool unassigned_mem_accepts(struct uc_struct *uc, void *opaque, hwaddr addr,
+static bool unassigned_mem_accepts(struct qc_struct *uc, void *opaque, hwaddr addr,
                                    unsigned size, bool is_write,
                                    MemTxAttrs attrs)
 {
@@ -944,7 +944,7 @@ const MemoryRegionOps unassigned_mem_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-bool memory_region_access_valid(struct uc_struct *uc, MemoryRegion *mr,
+bool memory_region_access_valid(struct qc_struct *uc, MemoryRegion *mr,
                                 hwaddr addr,
                                 unsigned size,
                                 bool is_write,
@@ -971,7 +971,7 @@ bool memory_region_access_valid(struct uc_struct *uc, MemoryRegion *mr,
     return true;
 }
 
-static MemTxResult memory_region_dispatch_read1(struct uc_struct *uc, MemoryRegion *mr,
+static MemTxResult memory_region_dispatch_read1(struct qc_struct *uc, MemoryRegion *mr,
                                                 hwaddr addr,
                                                 uint64_t *pval,
                                                 unsigned size,
@@ -994,7 +994,7 @@ static MemTxResult memory_region_dispatch_read1(struct uc_struct *uc, MemoryRegi
     }
 }
 
-MemTxResult memory_region_dispatch_read(struct uc_struct *uc, MemoryRegion *mr,
+MemTxResult memory_region_dispatch_read(struct qc_struct *uc, MemoryRegion *mr,
                                         hwaddr addr,
                                         uint64_t *pval,
                                         MemOp op,
@@ -1013,7 +1013,7 @@ MemTxResult memory_region_dispatch_read(struct uc_struct *uc, MemoryRegion *mr,
     return r;
 }
 
-MemTxResult memory_region_dispatch_write(struct uc_struct *uc, MemoryRegion *mr,
+MemTxResult memory_region_dispatch_write(struct qc_struct *uc, MemoryRegion *mr,
                                          hwaddr addr,
                                          uint64_t data,
                                          MemOp op,
@@ -1044,7 +1044,7 @@ MemTxResult memory_region_dispatch_write(struct uc_struct *uc, MemoryRegion *mr,
     }
 }
 
-void memory_region_init_io(struct uc_struct *uc,
+void memory_region_init_io(struct qc_struct *uc,
                            MemoryRegion *mr,
                            const MemoryRegionOps *ops,
                            void *opaque,
@@ -1056,7 +1056,7 @@ void memory_region_init_io(struct uc_struct *uc,
     mr->terminates = true;
 }
 
-void memory_region_init_ram_ptr(struct uc_struct *uc,
+void memory_region_init_ram_ptr(struct qc_struct *uc,
                                 MemoryRegion *mr,
                                 uint64_t size,
                                 void *ptr)
@@ -1097,7 +1097,7 @@ void *memory_region_get_ram_ptr(MemoryRegion *mr)
     return ptr;
 }
 
-MemoryRegion *memory_region_from_host(struct uc_struct *uc,
+MemoryRegion *memory_region_from_host(struct qc_struct *uc,
                                       void *ptr, ram_addr_t *offset)
 {
     RAMBlock *block;
@@ -1310,7 +1310,7 @@ void address_space_remove_listeners(AddressSpace *as)
     }
 }
 
-void address_space_init(struct uc_struct *uc,
+void address_space_init(struct qc_struct *uc,
                         AddressSpace *as,
                         MemoryRegion *root)
 {
@@ -1340,14 +1340,14 @@ void address_space_destroy(AddressSpace *as)
     flatview_unref(as->current_map);
 }
 
-void memory_region_init_ram(struct uc_struct *uc,
+void memory_region_init_ram(struct qc_struct *uc,
                             MemoryRegion *mr,
                             uint64_t size,
                             uint32_t perms)
 {
     memory_region_init(uc, mr, size);
     mr->ram = true;
-    if (!(perms & UC_PROT_WRITE)) {
+    if (!(perms & QC_PROT_WRITE)) {
         mr->readonly = true;
     }
     mr->perms = perms;

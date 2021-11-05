@@ -11,9 +11,9 @@
 #include "qemu/thread.h"
 #include "qemu/qdist.h"
 
-struct uc_struct;
+struct qc_struct;
 
-typedef bool (*qht_cmp_func_t)(struct uc_struct *uc, const void *a, const void *b);
+typedef bool (*qht_cmp_func_t)(struct qc_struct *uc, const void *a, const void *b);
 
 struct qht {
     struct qht_map *map;
@@ -43,8 +43,8 @@ struct qht_stats {
     struct qdist occupancy;
 };
 
-typedef bool (*qht_lookup_func_t)(struct uc_struct *uc, const void *obj, const void *userp);
-typedef void (*qht_iter_func_t)(struct uc_struct *uc, void *p, uint32_t h, void *up);
+typedef bool (*qht_lookup_func_t)(struct qc_struct *uc, const void *obj, const void *userp);
+typedef void (*qht_iter_func_t)(struct qc_struct *uc, void *p, uint32_t h, void *up);
 typedef bool (*qht_iter_bool_func_t)(void *p, uint32_t h, void *up);
 
 #define QHT_MODE_AUTO_RESIZE 0x1 /* auto-resize when heavily loaded */
@@ -86,7 +86,7 @@ void qht_destroy(struct qht *ht);
  * (i.e. ht->cmp matches and the hash is the same) to @p-@h. If @existing
  * is !NULL, a pointer to this existing entry is copied to it.
  */
-bool qht_insert(struct uc_struct *uc, struct qht *ht, void *p, uint32_t hash, void **existing);
+bool qht_insert(struct qc_struct *uc, struct qht *ht, void *p, uint32_t hash, void **existing);
 
 /**
  * qht_lookup_custom - Look up a pointer using a custom comparison function.
@@ -105,7 +105,7 @@ bool qht_insert(struct uc_struct *uc, struct qht *ht, void *p, uint32_t hash, vo
  * Returns the corresponding pointer when a match is found.
  * Returns NULL otherwise.
  */
-void *qht_lookup_custom(struct uc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash,
+void *qht_lookup_custom(struct qc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash,
                         qht_lookup_func_t func);
 
 /**
@@ -116,7 +116,7 @@ void *qht_lookup_custom(struct uc_struct *uc, const struct qht *ht, const void *
  *
  * Calls qht_lookup_custom() using @ht's default comparison function.
  */
-void *qht_lookup(struct uc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash);
+void *qht_lookup(struct qc_struct *uc, const struct qht *ht, const void *userp, uint32_t hash);
 
 /**
  * qht_remove - remove a pointer from the hash table
@@ -160,7 +160,7 @@ void qht_reset(struct qht *ht);
  * must remain valid for the existing RCU grace period -- see qht_remove().
  * See also: qht_reset(), qht_resize().
  */
-bool qht_reset_size(struct uc_struct *uc, struct qht *ht, size_t n_elems);
+bool qht_reset_size(struct qc_struct *uc, struct qht *ht, size_t n_elems);
 
 /**
  * qht_resize - resize a QHT
@@ -171,7 +171,7 @@ bool qht_reset_size(struct uc_struct *uc, struct qht *ht, size_t n_elems);
  * Returns false if the resize was not necessary and therefore not performed.
  * See also: qht_reset_size().
  */
-bool qht_resize(struct uc_struct *uc, struct qht *ht, size_t n_elems);
+bool qht_resize(struct qc_struct *uc, struct qht *ht, size_t n_elems);
 
 /**
  * qht_iter - Iterate over a QHT
@@ -185,7 +185,7 @@ bool qht_resize(struct uc_struct *uc, struct qht *ht, size_t n_elems);
  * Note: @ht cannot be accessed from @func
  * See also: qht_iter_remove()
  */
-void qht_iter(struct uc_struct *uc, struct qht *ht, qht_iter_func_t func, void *userp);
+void qht_iter(struct qc_struct *uc, struct qht *ht, qht_iter_func_t func, void *userp);
 
 /**
  * qht_iter_remove - Iterate over a QHT, optionally removing entries
@@ -199,7 +199,7 @@ void qht_iter(struct uc_struct *uc, struct qht *ht, qht_iter_func_t func, void *
  * Note: @ht cannot be accessed from @func
  * See also: qht_iter()
  */
-void qht_iter_remove(struct uc_struct *uc, struct qht *ht, qht_iter_bool_func_t func, void *userp);
+void qht_iter_remove(struct qc_struct *uc, struct qht *ht, qht_iter_bool_func_t func, void *userp);
 
 /**
  * qht_statistics_init - Gather statistics from a QHT

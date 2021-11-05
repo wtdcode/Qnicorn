@@ -36,7 +36,7 @@
 
 #include "qemu/compiler.h"
 
-struct uc_struct;
+struct qc_struct;
 
 
 /* Older versions of C++ don't get definitions of various macros from
@@ -83,7 +83,7 @@ struct uc_struct;
 #include <inttypes.h>
 #include <limits.h>
 
-#include <unicorn/platform.h>
+#include <qnicorn/platform.h>
 
 #include <time.h>
 #include <ctype.h>
@@ -328,9 +328,9 @@ struct uc_struct;
 
 void *qemu_try_memalign(size_t alignment, size_t size);
 void *qemu_memalign(size_t alignment, size_t size);
-void *qemu_anon_ram_alloc(struct uc_struct *uc, size_t size, uint64_t *align);
+void *qemu_anon_ram_alloc(struct qc_struct *uc, size_t size, uint64_t *align);
 void qemu_vfree(void *ptr);
-void qemu_anon_ram_free(struct uc_struct *uc, void *ptr, size_t size);
+void qemu_anon_ram_free(struct qc_struct *uc, void *ptr, size_t size);
 
 #define QEMU_MADV_INVALID -1
 

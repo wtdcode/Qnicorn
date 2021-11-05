@@ -6,8 +6,8 @@
 /* cpus.c */
 bool qemu_in_vcpu_thread(void);
 void qemu_init_cpu_loop(void);
-void resume_all_vcpus(struct uc_struct* uc);
-void cpu_stop_current(struct uc_struct* uc);
+void resume_all_vcpus(struct qc_struct* uc);
+void cpu_stop_current(struct qc_struct* uc);
 void cpu_ticks_init(void);
 
 /* Unblock cpu */

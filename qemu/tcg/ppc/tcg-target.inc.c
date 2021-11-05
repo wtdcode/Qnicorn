@@ -1886,7 +1886,7 @@ static TCGReg tcg_out_tlb_read(TCGContext *s, MemOp opc,
                                int mem_index, bool is_read)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
 #endif
     int cmp_off
         = (is_read

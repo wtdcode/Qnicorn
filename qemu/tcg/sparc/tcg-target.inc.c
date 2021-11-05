@@ -1084,7 +1084,7 @@ static TCGReg tcg_out_tlb_load(TCGContext *s, TCGReg addr, int mem_index,
                                MemOp opc, int which)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
 #endif
     int fast_off = TLB_MASK_TABLE_OFS(mem_index);
     int mask_off = fast_off + offsetof(CPUTLBDescFast, mask);

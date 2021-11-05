@@ -30,7 +30,7 @@
 #include "exec/tb-lookup.h"
 #include "tcg/tcg.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 /* 32-bit helpers */
 
@@ -151,7 +151,7 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
     TranslationBlock *tb;
     target_ulong cs_base, pc;
     uint32_t flags;
-    struct uc_struct *uc = (struct uc_struct *)cpu->uc;
+    struct qc_struct *uc = (struct qc_struct *)cpu->uc;
 
     tb = tb_lookup__cpu_state(cpu, &pc, &cs_base, &flags, curr_cflags());
     if (tb == NULL) {

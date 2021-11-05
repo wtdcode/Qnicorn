@@ -24,7 +24,7 @@
 #include "exec/exec-all.h"
 #include "fpu/softfloat-helpers.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 /* RISC-V CPU definitions */
 
@@ -186,7 +186,7 @@ static void riscv_cpu_reset(CPUState *dev)
     set_default_nan_mode(1, &env->fp_status);
 }
 
-static void riscv_cpu_realize(struct uc_struct *uc, CPUState *dev)
+static void riscv_cpu_realize(struct qc_struct *uc, CPUState *dev)
 {
     CPUState *cs = CPU(dev);
     RISCVCPU *cpu = RISCV_CPU(dev);
@@ -281,7 +281,7 @@ static void riscv_cpu_realize(struct uc_struct *uc, CPUState *dev)
     cpu_reset(cs);
 }
 
-static void riscv_cpu_init(struct uc_struct *uc, CPUState *obj)
+static void riscv_cpu_init(struct qc_struct *uc, CPUState *obj)
 {
     RISCVCPU *cpu = RISCV_CPU(obj);
     CPURISCVState *env = &cpu->env;
@@ -292,7 +292,7 @@ static void riscv_cpu_init(struct uc_struct *uc, CPUState *obj)
     cpu_set_cpustate_pointers(cpu);
 }
 
-static void riscv_cpu_class_init(struct uc_struct *uc, CPUClass *c, void *data)
+static void riscv_cpu_class_init(struct qc_struct *uc, CPUClass *c, void *data)
 {
     RISCVCPUClass *mcc = RISCV_CPU_CLASS(c);
     CPUClass *cc = CPU_CLASS(c);
@@ -329,7 +329,7 @@ static const CPUModelInfo cpu_models[] = {
 #endif
 };
 
-RISCVCPU *cpu_riscv_init(struct uc_struct *uc)
+RISCVCPU *cpu_riscv_init(struct qc_struct *uc)
 {
     RISCVCPU *cpu;
     CPUState *cs;

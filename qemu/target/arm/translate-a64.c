@@ -80,7 +80,7 @@ typedef void CryptoThreeOpFn(TCGContext *, TCGv_ptr, TCGv_ptr, TCGv_ptr);
 typedef void AtomicThreeOpFn(TCGContext *, TCGv_i64, TCGv_i64, TCGv_i64, TCGArg, MemOp);
 
 /* initialize TCG globals.  */
-void a64_translate_init(struct uc_struct *uc)
+void a64_translate_init(struct qc_struct *uc)
 {
     int i;
     TCGContext *tcg_ctx = uc->tcg_ctx;
@@ -317,7 +317,7 @@ static void gen_step_complete_exception(DisasContext *s)
 
 static inline bool use_goto_tb(DisasContext *s, int n, uint64_t dest)
 {
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
     /* No direct tb linking with singlestep (either QEMU's or the ARM
      * debug architecture kind) or deterministic io
      */
@@ -14419,10 +14419,10 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
     s->base.pc_next += 4;
 
     // Unicorn: trace this instruction on request
-    if (HOOK_EXISTS_BOUNDED(env->uc, UC_HOOK_CODE, s->pc_curr)) {
+    if (HOOK_EXISTS_BOUNDED(env->uc, QC_HOOK_CODE, s->pc_curr)) {
         TCGContext *tcg_ctx = env->uc->tcg_ctx;
 
-        gen_uc_tracecode(tcg_ctx, 4, UC_HOOK_CODE_IDX, env->uc, s->pc_curr);
+        gen_qc_tracecode(tcg_ctx, 4, QC_HOOK_CODE_IDX, env->uc, s->pc_curr);
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);
     }
@@ -14517,7 +14517,7 @@ static void aarch64_tr_init_disas_context(DisasContextBase *dcbase,
                                           CPUState *cpu)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
     CPUARMState *env = cpu->env_ptr;
     ARMCPU *arm_cpu = env_archcpu(env);
     uint32_t tb_flags = dc->base.tb->flags;
@@ -14637,7 +14637,7 @@ static void aarch64_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     CPUARMState *env = cpu->env_ptr;
 
     // Unicorn: end address tells us to stop emulation
-    if (uc_addr_is_exit(dc->uc, dcbase->pc_next)) {
+    if (qc_addr_is_exit(dc->uc, dcbase->pc_next)) {
         // imitate WFI instruction to halt emulation
         dcbase->is_jmp = DISAS_WFI;
     } else {

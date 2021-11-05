@@ -28,7 +28,7 @@
 #include "sysemu/tcg.h"
 #include "hw/i386/topology.h"
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 
 /* Helpers for building CPUID[2] descriptors: */
@@ -4505,7 +4505,7 @@ static void x86_cpu_filter_features(X86CPU *cpu, bool verbose)
     }
 }
 
-static void x86_cpu_realizefn(struct uc_struct *uc, CPUState *dev)
+static void x86_cpu_realizefn(struct qc_struct *uc, CPUState *dev)
 {
     CPUState *cs = CPU(dev);
     X86CPU *cpu = X86_CPU(cs);
@@ -4620,7 +4620,7 @@ static void x86_cpu_realizefn(struct uc_struct *uc, CPUState *dev)
     cpu_reset(cs);
 }
 
-static void x86_cpu_initfn(struct uc_struct *uc, CPUState *obj)
+static void x86_cpu_initfn(struct qc_struct *uc, CPUState *obj)
 {
     X86CPU *cpu = X86_CPU(obj);
     X86CPUClass *xcc = X86_CPU_GET_CLASS(obj);
@@ -4750,7 +4750,7 @@ void x86_update_hflags(CPUX86State *env)
     env->hflags = hflags;
 }
 
-static void x86_cpu_common_class_init(struct uc_struct *uc, CPUClass *oc, void *data)
+static void x86_cpu_common_class_init(struct qc_struct *uc, CPUClass *oc, void *data)
 {
     X86CPUClass *xcc = X86_CPU_CLASS(oc);
     CPUClass *cc = CPU_CLASS(oc);
@@ -4776,7 +4776,7 @@ static void x86_cpu_common_class_init(struct uc_struct *uc, CPUClass *oc, void *
     cc->tlb_fill = x86_cpu_tlb_fill;
 }
 
-X86CPU *cpu_x86_init(struct uc_struct *uc)
+X86CPU *cpu_x86_init(struct qc_struct *uc)
 {
     X86CPU *cpu;
     CPUState *cs;

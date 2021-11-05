@@ -9898,7 +9898,7 @@ static int ppc_fixup_cpu(PowerPCCPU *cpu)
     return 0;
 }
 
-static void ppc_cpu_realize(struct uc_struct *uc, CPUState *dev)
+static void ppc_cpu_realize(struct qc_struct *uc, CPUState *dev)
 {
     CPUState *cs = CPU(dev);
     PowerPCCPU *cpu = POWERPC_CPU(dev);
@@ -10240,7 +10240,7 @@ static void ppc_cpu_exec_exit(CPUState *cs)
 #endif
 }
 
-static void ppc_cpu_instance_init(struct uc_struct *uc, CPUState *obj)
+static void ppc_cpu_instance_init(struct qc_struct *uc, CPUState *obj)
 {
     PowerPCCPU *cpu = POWERPC_CPU(obj);
     PowerPCCPUClass *pcc = POWERPC_CPU_GET_CLASS(cpu);
@@ -10335,7 +10335,7 @@ static Property ppc_cpu_properties[] = {
 };
 #endif
 
-static void ppc_cpu_class_init(struct uc_struct *uc, CPUClass *oc)
+static void ppc_cpu_class_init(struct qc_struct *uc, CPUClass *oc)
 {
     PowerPCCPUClass *pcc = POWERPC_CPU_CLASS(oc);
     CPUClass *cc = CPU_CLASS(oc);
@@ -11135,7 +11135,7 @@ static const PowerPCCPUInfo ppc_cpus[] = {
 #endif /* defined (TARGET_PPC64) */
 };
 
-PowerPCCPU *cpu_ppc_init(struct uc_struct *uc)
+PowerPCCPU *cpu_ppc_init(struct qc_struct *uc)
 {
     PowerPCCPU *cpu;
     CPUState *cs;
@@ -11149,8 +11149,8 @@ PowerPCCPU *cpu_ppc_init(struct uc_struct *uc)
     memset(cpu, 0, sizeof(*cpu));
 #ifdef TARGET_PPC64
     if (uc->cpu_model == INT_MAX) {
-        uc->cpu_model = 18 + UC_CPU_PPC_7457A_V1_2 + 1; // power10_v1.0
-    } else if (uc->cpu_model + UC_CPU_PPC_7457A_V1_2 + 1 >= ARRAY_SIZE(ppc_cpus)) {
+        uc->cpu_model = 18 + QC_CPU_PPC_7457A_V1_2 + 1; // power10_v1.0
+    } else if (uc->cpu_model + QC_CPU_PPC_7457A_V1_2 + 1 >= ARRAY_SIZE(ppc_cpus)) {
         free(cpu);
         return NULL;
     }

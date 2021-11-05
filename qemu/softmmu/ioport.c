@@ -28,9 +28,9 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "exec/memory.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 
-static uint64_t unassigned_io_read(struct uc_struct *uc, void* opaque, hwaddr addr, unsigned size)
+static uint64_t unassigned_io_read(struct qc_struct *uc, void* opaque, hwaddr addr, unsigned size)
 {
 #ifdef _MSC_VER
     return (uint64_t)0xffffffffffffffffULL;
@@ -39,7 +39,7 @@ static uint64_t unassigned_io_read(struct uc_struct *uc, void* opaque, hwaddr ad
 #endif
 }
 
-static void unassigned_io_write(struct uc_struct *uc, void* opaque, hwaddr addr, uint64_t data, unsigned size)
+static void unassigned_io_write(struct qc_struct *uc, void* opaque, hwaddr addr, uint64_t data, unsigned size)
 {
 }
 
@@ -49,7 +49,7 @@ const MemoryRegionOps unassigned_io_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-void cpu_outb(struct uc_struct *uc, uint32_t addr, uint8_t val)
+void cpu_outb(struct qc_struct *uc, uint32_t addr, uint8_t val)
 {
     // address_space_write(&uc->address_space_io, addr, MEMTXATTRS_UNSPECIFIED,
     //                     &val, 1);
@@ -58,15 +58,15 @@ void cpu_outb(struct uc_struct *uc, uint32_t addr, uint8_t val)
     // Unicorn: call registered OUT callbacks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
-        if (hook->insn == UC_X86_INS_OUT)
-            ((uc_cb_insn_out_t)hook->callback)(uc, addr, 1, val, hook->user_data);
+        if (hook->insn == QC_X86_INS_OUT)
+            ((qc_cb_insn_out_t)hook->callback)(uc, addr, 1, val, hook->user_data);
     }
 }
 
-void cpu_outw(struct uc_struct *uc, uint32_t addr, uint16_t val)
+void cpu_outw(struct qc_struct *uc, uint32_t addr, uint16_t val)
 {
     // uint8_t buf[2];
 
@@ -78,15 +78,15 @@ void cpu_outw(struct uc_struct *uc, uint32_t addr, uint16_t val)
     // Unicorn: call registered OUT callbacks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
-        if (hook->insn == UC_X86_INS_OUT)
-            ((uc_cb_insn_out_t)hook->callback)(uc, addr, 2, val, hook->user_data);
+        if (hook->insn == QC_X86_INS_OUT)
+            ((qc_cb_insn_out_t)hook->callback)(uc, addr, 2, val, hook->user_data);
     }
 }
 
-void cpu_outl(struct uc_struct *uc, uint32_t addr, uint32_t val)
+void cpu_outl(struct qc_struct *uc, uint32_t addr, uint32_t val)
 {
     // uint8_t buf[4];
 
@@ -98,15 +98,15 @@ void cpu_outl(struct uc_struct *uc, uint32_t addr, uint32_t val)
     // Unicorn: call registered OUT callbacks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
-        if (hook->insn == UC_X86_INS_OUT)
-            ((uc_cb_insn_out_t)hook->callback)(uc, addr, 4, val, hook->user_data);
+        if (hook->insn == QC_X86_INS_OUT)
+            ((qc_cb_insn_out_t)hook->callback)(uc, addr, 4, val, hook->user_data);
     }
 }
 
-uint8_t cpu_inb(struct uc_struct *uc, uint32_t addr)
+uint8_t cpu_inb(struct qc_struct *uc, uint32_t addr)
 {
     // uint8_t val;
 
@@ -117,17 +117,17 @@ uint8_t cpu_inb(struct uc_struct *uc, uint32_t addr)
     // Unicorn: call registered IN callbacks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
-        if (hook->insn == UC_X86_INS_IN)
-            return ((uc_cb_insn_in_t)hook->callback)(uc, addr, 1, hook->user_data);
+        if (hook->insn == QC_X86_INS_IN)
+            return ((qc_cb_insn_in_t)hook->callback)(uc, addr, 1, hook->user_data);
     }
 
     return 0;
 }
 
-uint16_t cpu_inw(struct uc_struct *uc, uint32_t addr)
+uint16_t cpu_inw(struct qc_struct *uc, uint32_t addr)
 {
     // uint8_t buf[2];
     // uint16_t val;
@@ -139,17 +139,17 @@ uint16_t cpu_inw(struct uc_struct *uc, uint32_t addr)
     // Unicorn: call registered IN callbacks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
-        if (hook->insn == UC_X86_INS_IN)
-            return ((uc_cb_insn_in_t)hook->callback)(uc, addr, 2, hook->user_data);
+        if (hook->insn == QC_X86_INS_IN)
+            return ((qc_cb_insn_in_t)hook->callback)(uc, addr, 2, hook->user_data);
     }
 
     return 0;
 }
 
-uint32_t cpu_inl(struct uc_struct *uc, uint32_t addr)
+uint32_t cpu_inl(struct qc_struct *uc, uint32_t addr)
 {
     // uint8_t buf[4];
     // uint32_t val;
@@ -163,11 +163,11 @@ uint32_t cpu_inl(struct uc_struct *uc, uint32_t addr)
     // Unicorn: call registered IN callbacks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
-        if (hook->insn == UC_X86_INS_IN)
-            return ((uc_cb_insn_in_t)hook->callback)(uc, addr, 4, hook->user_data);
+        if (hook->insn == QC_X86_INS_IN)
+            return ((qc_cb_insn_in_t)hook->callback)(uc, addr, 4, hook->user_data);
     }
 
     return 0;

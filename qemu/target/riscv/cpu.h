@@ -202,7 +202,7 @@ struct CPURISCVState {
     QEMUTimer *timer; /* Internal timer */
 
     // Unicorn engine
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 /**
@@ -313,7 +313,7 @@ void riscv_cpu_set_rdtime_fn(CPURISCVState *env, uint64_t (*fn)(void));
 
 void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv);
 
-void riscv_translate_init(struct uc_struct *uc);
+void riscv_translate_init(struct qc_struct *uc);
 void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
                                          uint32_t exception, uintptr_t pc);
 

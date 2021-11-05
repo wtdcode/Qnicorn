@@ -22,7 +22,7 @@ static void error_exit(int err, const char *msg)
     abort();
 }
 
-int qemu_thread_create(struct uc_struct *uc, QemuThread *thread, const char *name,
+int qemu_thread_create(struct qc_struct *uc, QemuThread *thread, const char *name,
                        void *(*start_routine)(void*),
                        void *arg, int mode)
 {
@@ -62,7 +62,7 @@ int qemu_thread_create(struct uc_struct *uc, QemuThread *thread, const char *nam
     return 0;
 }
 
-void qemu_thread_exit(struct uc_struct *uc, void *retval)
+void qemu_thread_exit(struct qc_struct *uc, void *retval)
 {
     pthread_exit(retval);
 }

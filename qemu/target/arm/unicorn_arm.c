@@ -7,13 +7,13 @@
 #include "sysemu/cpus.h"
 #include "sysemu/tcg.h"
 #include "cpu.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 #include "unicorn_common.h"
 #include "unicorn.h"
 
-ARMCPU *cpu_arm_init(struct uc_struct *uc);
+ARMCPU *cpu_arm_init(struct qc_struct *uc);
 
-static void arm_set_pc(struct uc_struct *uc, uint64_t address)
+static void arm_set_pc(struct qc_struct *uc, uint64_t address)
 {
     ((CPUARMState *)uc->cpu->env_ptr)->pc = address;
     ((CPUARMState *)uc->cpu->env_ptr)->regs[15] = address;
@@ -84,7 +84,7 @@ static void arm_release(void *ctx)
     g_hash_table_destroy(cpu->cp_regs);
 }
 
-void arm_reg_reset(struct uc_struct *uc)
+void arm_reg_reset(struct qc_struct *uc)
 {
     CPUArchState *env;
     (void)uc;
@@ -149,14 +149,14 @@ static void v7m_msr_xpsr(CPUARMState *env, uint32_t mask, uint32_t reg,
 
 static void reg_read(CPUARMState *env, unsigned int regid, void *value)
 {
-    if (regid >= UC_ARM_REG_R0 && regid <= UC_ARM_REG_R12) {
-        *(int32_t *)value = env->regs[regid - UC_ARM_REG_R0];
-    } else if (regid >= UC_ARM_REG_D0 && regid <= UC_ARM_REG_D31) {
-        uint32_t reg_index = regid - UC_ARM_REG_D0;
+    if (regid >= QC_ARM_REG_R0 && regid <= QC_ARM_REG_R12) {
+        *(int32_t *)value = env->regs[regid - QC_ARM_REG_R0];
+    } else if (regid >= QC_ARM_REG_D0 && regid <= QC_ARM_REG_D31) {
+        uint32_t reg_index = regid - QC_ARM_REG_D0;
         *(float64 *)value = env->vfp.zregs[reg_index / 2].d[reg_index & 1];
     } else {
         switch (regid) {
-        case UC_ARM_REG_APSR:
+        case QC_ARM_REG_APSR:
             if (arm_feature(env, ARM_FEATURE_M)) {
                 *(int32_t *)value = v7m_mrs_xpsr(env, 0);
             } else {
@@ -164,73 +164,73 @@ static void reg_read(CPUARMState *env, unsigned int regid, void *value)
                     cpsr_read(env) & (CPSR_NZCV | CPSR_Q | CPSR_GE);
             }
             break;
-        case UC_ARM_REG_APSR_NZCV:
+        case QC_ARM_REG_APSR_NZCV:
             *(int32_t *)value = cpsr_read(env) & CPSR_NZCV;
             break;
-        case UC_ARM_REG_CPSR:
+        case QC_ARM_REG_CPSR:
             *(int32_t *)value = cpsr_read(env);
             break;
-        case UC_ARM_REG_SPSR:
+        case QC_ARM_REG_SPSR:
             *(int32_t *)value = env->spsr;
             break;
-        // case UC_ARM_REG_SP:
-        case UC_ARM_REG_R13:
+        // case QC_ARM_REG_SP:
+        case QC_ARM_REG_R13:
             *(int32_t *)value = env->regs[13];
             break;
-        // case UC_ARM_REG_LR:
-        case UC_ARM_REG_R14:
+        // case QC_ARM_REG_LR:
+        case QC_ARM_REG_R14:
             *(int32_t *)value = env->regs[14];
             break;
-        // case UC_ARM_REG_PC:
-        case UC_ARM_REG_R15:
+        // case QC_ARM_REG_PC:
+        case QC_ARM_REG_R15:
             *(int32_t *)value = env->regs[15];
             break;
-        case UC_ARM_REG_C1_C0_2:
+        case QC_ARM_REG_C1_C0_2:
             *(int32_t *)value = env->cp15.cpacr_el1;
             break;
-        case UC_ARM_REG_C13_C0_3:
+        case QC_ARM_REG_C13_C0_3:
             *(int32_t *)value = env->cp15.tpidrro_el[0];
             break;
-        case UC_ARM_REG_FPEXC:
+        case QC_ARM_REG_FPEXC:
             *(int32_t *)value = env->vfp.xregs[ARM_VFP_FPEXC];
             break;
-        case UC_ARM_REG_IPSR:
+        case QC_ARM_REG_IPSR:
             *(int32_t *)value = v7m_mrs_xpsr(env, 5);
             break;
-        case UC_ARM_REG_MSP:
+        case QC_ARM_REG_MSP:
             *(uint32_t *)value = helper_v7m_mrs(env, 8);
             break;
-        case UC_ARM_REG_PSP:
+        case QC_ARM_REG_PSP:
             *(uint32_t *)value = helper_v7m_mrs(env, 9);
             break;
-        case UC_ARM_REG_IAPSR:
+        case QC_ARM_REG_IAPSR:
             *(int32_t *)value = v7m_mrs_xpsr(env, 1);
             break;
-        case UC_ARM_REG_EAPSR:
+        case QC_ARM_REG_EAPSR:
             *(int32_t *)value = v7m_mrs_xpsr(env, 2);
             break;
-        case UC_ARM_REG_XPSR:
+        case QC_ARM_REG_XPSR:
             *(int32_t *)value = v7m_mrs_xpsr(env, 3);
             break;
-        case UC_ARM_REG_EPSR:
+        case QC_ARM_REG_EPSR:
             *(int32_t *)value = v7m_mrs_xpsr(env, 6);
             break;
-        case UC_ARM_REG_IEPSR:
+        case QC_ARM_REG_IEPSR:
             *(int32_t *)value = v7m_mrs_xpsr(env, 7);
             break;
-        case UC_ARM_REG_PRIMASK:
+        case QC_ARM_REG_PRIMASK:
             *(uint32_t *)value = helper_v7m_mrs(env, 16);
             break;
-        case UC_ARM_REG_BASEPRI:
+        case QC_ARM_REG_BASEPRI:
             *(uint32_t *)value = helper_v7m_mrs(env, 17);
             break;
-        case UC_ARM_REG_BASEPRI_MAX:
+        case QC_ARM_REG_BASEPRI_MAX:
             *(uint32_t *)value = helper_v7m_mrs(env, 18);
             break;
-        case UC_ARM_REG_FAULTMASK:
+        case QC_ARM_REG_FAULTMASK:
             *(uint32_t *)value = helper_v7m_mrs(env, 19);
             break;
-        case UC_ARM_REG_CONTROL:
+        case QC_ARM_REG_CONTROL:
             *(uint32_t *)value = helper_v7m_mrs(env, 20);
             break;
         }
@@ -241,123 +241,123 @@ static void reg_read(CPUARMState *env, unsigned int regid, void *value)
 
 static void reg_write(CPUARMState *env, unsigned int regid, const void *value)
 {
-    if (regid >= UC_ARM_REG_R0 && regid <= UC_ARM_REG_R12) {
-        env->regs[regid - UC_ARM_REG_R0] = *(uint32_t *)value;
-    } else if (regid >= UC_ARM_REG_D0 && regid <= UC_ARM_REG_D31) {
-        uint32_t reg_index = regid - UC_ARM_REG_D0;
+    if (regid >= QC_ARM_REG_R0 && regid <= QC_ARM_REG_R12) {
+        env->regs[regid - QC_ARM_REG_R0] = *(uint32_t *)value;
+    } else if (regid >= QC_ARM_REG_D0 && regid <= QC_ARM_REG_D31) {
+        uint32_t reg_index = regid - QC_ARM_REG_D0;
         env->vfp.zregs[reg_index / 2].d[reg_index & 1] = *(float64 *)value;
     } else {
         switch (regid) {
-        case UC_ARM_REG_APSR:
+        case QC_ARM_REG_APSR:
             if (!arm_feature(env, ARM_FEATURE_M)) {
                 cpsr_write(env, *(uint32_t *)value,
                            (CPSR_NZCV | CPSR_Q | CPSR_GE), CPSRWriteRaw);
             } else {
-                // Same with UC_ARM_REG_APSR_NZCVQ
+                // Same with QC_ARM_REG_APSR_NZCVQ
                 v7m_msr_xpsr(env, 0b1000, 0, *(uint32_t *)value);
             }
             break;
-        case UC_ARM_REG_APSR_NZCV:
+        case QC_ARM_REG_APSR_NZCV:
             cpsr_write(env, *(uint32_t *)value, CPSR_NZCV, CPSRWriteRaw);
             break;
-        case UC_ARM_REG_CPSR:
+        case QC_ARM_REG_CPSR:
             cpsr_write(env, *(uint32_t *)value, ~0, CPSRWriteRaw);
             break;
-        case UC_ARM_REG_SPSR:
+        case QC_ARM_REG_SPSR:
             env->spsr = *(uint32_t *)value;
             break;
-        // case UC_ARM_REG_SP:
-        case UC_ARM_REG_R13:
+        // case QC_ARM_REG_SP:
+        case QC_ARM_REG_R13:
             env->regs[13] = *(uint32_t *)value;
             break;
-        // case UC_ARM_REG_LR:
-        case UC_ARM_REG_R14:
+        // case QC_ARM_REG_LR:
+        case QC_ARM_REG_R14:
             env->regs[14] = *(uint32_t *)value;
             break;
-        // case UC_ARM_REG_PC:
-        case UC_ARM_REG_R15:
+        // case QC_ARM_REG_PC:
+        case QC_ARM_REG_R15:
             env->pc = (*(uint32_t *)value & ~1);
             env->thumb = (*(uint32_t *)value & 1);
             env->uc->thumb = (*(uint32_t *)value & 1);
             env->regs[15] = (*(uint32_t *)value & ~1);
             break;
-            // case UC_ARM_REG_C1_C0_2:
+            // case QC_ARM_REG_C1_C0_2:
             //     env->cp15.c1_coproc = *(int32_t *)value;
             //     break;
 
-        case UC_ARM_REG_C13_C0_3:
+        case QC_ARM_REG_C13_C0_3:
             env->cp15.tpidrro_el[0] = *(int32_t *)value;
             break;
-        case UC_ARM_REG_FPEXC:
+        case QC_ARM_REG_FPEXC:
             env->vfp.xregs[ARM_VFP_FPEXC] = *(int32_t *)value;
             break;
-        case UC_ARM_REG_IPSR:
+        case QC_ARM_REG_IPSR:
             v7m_msr_xpsr(env, 0b1000, 5, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_MSP:
+        case QC_ARM_REG_MSP:
             helper_v7m_msr(env, 8, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_PSP:
+        case QC_ARM_REG_PSP:
             helper_v7m_msr(env, 9, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_CONTROL:
+        case QC_ARM_REG_CONTROL:
             helper_v7m_msr(env, 20, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_EPSR:
+        case QC_ARM_REG_EPSR:
             v7m_msr_xpsr(env, 0b1000, 6, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_IEPSR:
+        case QC_ARM_REG_IEPSR:
             v7m_msr_xpsr(env, 0b1000, 7, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_PRIMASK:
+        case QC_ARM_REG_PRIMASK:
             helper_v7m_msr(env, 16, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_BASEPRI:
+        case QC_ARM_REG_BASEPRI:
             helper_v7m_msr(env, 17, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_BASEPRI_MAX:
+        case QC_ARM_REG_BASEPRI_MAX:
             helper_v7m_msr(env, 18, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_FAULTMASK:
+        case QC_ARM_REG_FAULTMASK:
             helper_v7m_msr(env, 19, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_APSR_NZCVQ:
+        case QC_ARM_REG_APSR_NZCVQ:
             v7m_msr_xpsr(env, 0b1000, 0, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_APSR_G:
+        case QC_ARM_REG_APSR_G:
             v7m_msr_xpsr(env, 0b0100, 0, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_APSR_NZCVQG:
+        case QC_ARM_REG_APSR_NZCVQG:
             v7m_msr_xpsr(env, 0b1100, 0, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_IAPSR:
-        case UC_ARM_REG_IAPSR_NZCVQ:
+        case QC_ARM_REG_IAPSR:
+        case QC_ARM_REG_IAPSR_NZCVQ:
             v7m_msr_xpsr(env, 0b1000, 1, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_IAPSR_G:
+        case QC_ARM_REG_IAPSR_G:
             v7m_msr_xpsr(env, 0b0100, 1, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_IAPSR_NZCVQG:
+        case QC_ARM_REG_IAPSR_NZCVQG:
             v7m_msr_xpsr(env, 0b1100, 1, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_EAPSR:
-        case UC_ARM_REG_EAPSR_NZCVQ:
+        case QC_ARM_REG_EAPSR:
+        case QC_ARM_REG_EAPSR_NZCVQ:
             v7m_msr_xpsr(env, 0b1000, 2, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_EAPSR_G:
+        case QC_ARM_REG_EAPSR_G:
             v7m_msr_xpsr(env, 0b0100, 2, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_EAPSR_NZCVQG:
+        case QC_ARM_REG_EAPSR_NZCVQG:
             v7m_msr_xpsr(env, 0b1100, 2, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_XPSR:
-        case UC_ARM_REG_XPSR_NZCVQ:
+        case QC_ARM_REG_XPSR:
+        case QC_ARM_REG_XPSR_NZCVQ:
             v7m_msr_xpsr(env, 0b1000, 3, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_XPSR_G:
+        case QC_ARM_REG_XPSR_G:
             v7m_msr_xpsr(env, 0b0100, 3, *(uint32_t *)value);
             break;
-        case UC_ARM_REG_XPSR_NZCVQG:
+        case QC_ARM_REG_XPSR_NZCVQG:
             v7m_msr_xpsr(env, 0b1100, 3, *(uint32_t *)value);
             break;
         }
@@ -366,7 +366,7 @@ static void reg_write(CPUARMState *env, unsigned int regid, const void *value)
     return;
 }
 
-int arm_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals,
+int arm_reg_read(struct qc_struct *uc, unsigned int *regs, void **vals,
                  int count)
 {
     CPUARMState *env = &(ARM_CPU(uc->cpu)->env);
@@ -381,7 +381,7 @@ int arm_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals,
     return 0;
 }
 
-int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
+int arm_reg_write(struct qc_struct *uc, unsigned int *regs, void *const *vals,
                   int count)
 {
     CPUArchState *env = &(ARM_CPU(uc->cpu)->env);
@@ -391,10 +391,10 @@ int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
         unsigned int regid = regs[i];
         const void *value = vals[i];
         reg_write(env, regid, value);
-        if (regid == UC_ARM_REG_R15) {
+        if (regid == QC_ARM_REG_R15) {
             // force to quit execution and flush TB
             uc->quit_request = true;
-            uc_emu_stop(uc);
+            qc_emu_stop(uc);
         }
     }
 
@@ -403,10 +403,10 @@ int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
 
 DEFAULT_VISIBILITY
 #ifdef TARGET_WORDS_BIGENDIAN
-int armeb_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+int armeb_context_reg_read(struct qc_context *ctx, unsigned int *regs,
                            void **vals, int count)
 #else
-int arm_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+int arm_context_reg_read(struct qc_context *ctx, unsigned int *regs,
                          void **vals, int count)
 #endif
 {
@@ -424,10 +424,10 @@ int arm_context_reg_read(struct uc_context *ctx, unsigned int *regs,
 
 DEFAULT_VISIBILITY
 #ifdef TARGET_WORDS_BIGENDIAN
-int armeb_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+int armeb_context_reg_write(struct qc_context *ctx, unsigned int *regs,
                             void *const *vals, int count)
 #else
-int arm_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+int arm_context_reg_write(struct qc_context *ctx, unsigned int *regs,
                           void *const *vals, int count)
 #endif
 {
@@ -443,7 +443,7 @@ int arm_context_reg_write(struct uc_context *ctx, unsigned int *regs,
     return 0;
 }
 
-static bool arm_stop_interrupt(struct uc_struct *uc, int intno)
+static bool arm_stop_interrupt(struct qc_struct *uc, int intno)
 {
     switch (intno) {
     default:
@@ -452,45 +452,45 @@ static bool arm_stop_interrupt(struct uc_struct *uc, int intno)
     case EXCP_YIELD:
         return true;
     case EXCP_INVSTATE:
-        uc->invalid_error = UC_ERR_EXCEPTION;
+        uc->invalid_error = QC_ERR_EXCEPTION;
         return true;
     }
 }
 
-static uc_err arm_query(struct uc_struct *uc, uc_query_type type,
+static qc_err arm_query(struct qc_struct *uc, qc_query_type type,
                         size_t *result)
 {
     CPUState *mycpu = uc->cpu;
     uint32_t mode;
 
     switch (type) {
-    case UC_QUERY_MODE:
+    case QC_QUERY_MODE:
         // zero out ARM/THUMB mode
-        mode = uc->mode & ~(UC_MODE_ARM | UC_MODE_THUMB);
+        mode = uc->mode & ~(QC_MODE_ARM | QC_MODE_THUMB);
         // THUMB mode or ARM MOde
         mode |=
-            ((ARM_CPU(mycpu)->env.thumb != 0) ? UC_MODE_THUMB : UC_MODE_ARM);
+            ((ARM_CPU(mycpu)->env.thumb != 0) ? QC_MODE_THUMB : QC_MODE_ARM);
         *result = mode;
-        return UC_ERR_OK;
+        return QC_ERR_OK;
     default:
-        return UC_ERR_ARG;
+        return QC_ERR_ARG;
     }
 }
 
 static bool arm_opcode_hook_invalidate(uint32_t op, uint32_t flags)
 {
-    if (op != UC_TCG_OP_SUB) {
+    if (op != QC_TCG_OP_SUB) {
         return false;
     }
 
-    if (flags == UC_TCG_OP_FLAG_CMP && op != UC_TCG_OP_SUB) {
+    if (flags == QC_TCG_OP_FLAG_CMP && op != QC_TCG_OP_SUB) {
         return false;
     }
 
     return true;
 }
 
-static int arm_cpus_init(struct uc_struct *uc, const char *cpu_model)
+static int arm_cpus_init(struct qc_struct *uc, const char *cpu_model)
 {
     ARMCPU *cpu;
 
@@ -503,9 +503,9 @@ static int arm_cpus_init(struct uc_struct *uc, const char *cpu_model)
 }
 
 #ifdef TARGET_WORDS_BIGENDIAN
-void armeb_uc_init(struct uc_struct *uc)
+void armeb_qc_init(struct qc_struct *uc)
 #else
-void arm_uc_init(struct uc_struct *uc)
+void arm_qc_init(struct qc_struct *uc)
 #endif
 {
     uc->reg_read = arm_reg_read;
@@ -518,5 +518,5 @@ void arm_uc_init(struct uc_struct *uc)
     uc->cpus_init = arm_cpus_init;
     uc->opcode_hook_invalidate = arm_opcode_hook_invalidate;
     uc->cpu_context_size = offsetof(CPUARMState, cpu_watchpoint);
-    uc_common_init(uc);
+    qc_common_init(uc);
 }

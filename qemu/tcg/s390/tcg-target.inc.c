@@ -1548,7 +1548,7 @@ static TCGReg tcg_out_tlb_read(TCGContext *s, TCGReg addr_reg, MemOp opc,
                                int mem_index, bool is_ld)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
 #endif
     unsigned s_bits = opc & MO_SIZE;
     unsigned a_bits = get_alignment_bits(opc);

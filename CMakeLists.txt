@@ -1202,13 +1202,14 @@ endif()
 
 if(NOT MSVC)
     include("GNUInstallDirs")
-    file(GLOB QNICORN_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/unicorn/*.h)
+    file(GLOB QNICORN_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/qnicorn/*.h)
+    set(QNICORN_HEADERS ${QNICORN_HEADERS} ${CMAKE_CURRENT_SOURCE_DIR}/include/unicorn/unicorn.h)
     install(TARGETS qnicorn
         RUNTIME DESTINATION bin
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
-    install(FILES ${QNICORN_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/unicorn)
+    install(FILES ${QNICORN_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qnicorn)
     file(WRITE ${CMAKE_BINARY_DIR}/qnicorn.pc "Name: qnicorn\n\
 Description: Unicorn emulator engine\n\
 Version: ${QNICORN_VERSION_MAJOR}.${QNICORN_VERSION_MINOR}.${QNICORN_VERSION_PATCH}\n\

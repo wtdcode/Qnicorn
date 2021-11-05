@@ -29,7 +29,7 @@
 #include "exec/tb-hash.h"
 #include "accel/tcg/translate-all.h"
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 
 int64_t cpu_icount_to_ns(int64_t icount)
@@ -81,7 +81,7 @@ static void cpu_handle_guest_debug(CPUState *cpu)
     cpu->stopped = true;
 }
 
-static int tcg_cpu_exec(struct uc_struct *uc)
+static int tcg_cpu_exec(struct qc_struct *uc)
 {
     int r;
     bool finish = false;
@@ -162,7 +162,7 @@ void qemu_init_vcpu(CPUState *cpu)
     return;
 }
 
-void cpu_stop_current(struct uc_struct *uc)
+void cpu_stop_current(struct qc_struct *uc)
 {
     if (uc->cpu) {
         uc->cpu->stop = false;
@@ -173,10 +173,10 @@ void cpu_stop_current(struct uc_struct *uc)
 
 
 
-static inline gboolean uc_exit_invalidate_iter(gpointer key, gpointer val, gpointer data) 
+static inline gboolean qc_exit_invalidate_iter(gpointer key, gpointer val, gpointer data) 
 {
     uint64_t exit = *((uint64_t*)key);
-    uc_engine *uc = (uc_engine*)data;
+    qc_engine *uc = (qc_engine*)data;
     
     if (exit != 0) {
         // Unicorn: Why addr - 1?
@@ -187,20 +187,20 @@ static inline gboolean uc_exit_invalidate_iter(gpointer key, gpointer val, gpoin
         // While tb_invalidate_phys_range invalides [start, end)
         //
         // This function is designed to used with g_tree_foreach
-        uc->uc_invalidate_tb(uc, exit - 1, 1);
+        uc->qc_invalidate_tb(uc, exit - 1, 1);
     }
 
     return false;
 }
 
-void resume_all_vcpus(struct uc_struct* uc)
+void resume_all_vcpus(struct qc_struct* uc)
 {
     CPUState *cpu = uc->cpu;
     cpu->halted = 0;
     cpu->exit_request = 0;
     cpu->exception_index = -1;
     cpu_resume(cpu);
-    /* static void qemu_tcg_cpu_loop(struct uc_struct *uc) */
+    /* static void qemu_tcg_cpu_loop(struct qc_struct *uc) */
     cpu->created = true;
     while (true) {
         if (tcg_cpu_exec(uc)) {
@@ -212,12 +212,12 @@ void resume_all_vcpus(struct uc_struct* uc)
     // at that address is to exit emulation, but not for the instruction there.
     // if we dont do this, next time we cannot emulate at that address
 
-    g_tree_foreach(uc->exits, uc_exit_invalidate_iter, (void*)uc);
+    g_tree_foreach(uc->exits, qc_exit_invalidate_iter, (void*)uc);
 
     cpu->created = false;
 }
 
-void vm_start(struct uc_struct* uc)
+void vm_start(struct qc_struct* uc)
 {
     resume_all_vcpus(uc);
 }

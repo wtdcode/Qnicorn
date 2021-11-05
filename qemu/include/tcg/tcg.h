@@ -703,7 +703,7 @@ struct TCGContext {
     TCGOpDef *tcg_op_defs;
 
     // Unicorn engine variables
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 
     /* qemu/target/i386/translate.c: global register indexes */
     TCGv cpu_cc_dst, cpu_cc_src, cpu_cc_src2;

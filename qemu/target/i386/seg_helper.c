@@ -25,7 +25,7 @@
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 #include <unicorn/unicorn.h>
 
 //#define DEBUG_PCALL
@@ -974,13 +974,13 @@ void helper_syscall(CPUX86State *env, int next_eip_addend)
     // Unicorn: call registered syscall hooks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(env->uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
         if (!HOOK_BOUND_CHECK(hook, env->eip))
             continue;
-        if (hook->insn == UC_X86_INS_SYSCALL)
-            ((uc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
+        if (hook->insn == QC_X86_INS_SYSCALL)
+            ((qc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
 
         // the last callback may already asked to stop emulation
         if (env->uc->stop_request)
@@ -1396,7 +1396,7 @@ void helper_ltr(CPUX86State *env, int selector)
 }
 
 // Unicorn: check the arguments before run cpu_x86_load_seg().
-int uc_check_cpu_x86_load_seg(CPUX86State *env, int seg_reg, int sel)
+int qc_check_cpu_x86_load_seg(CPUX86State *env, int seg_reg, int sel)
 {
     int selector;
     uint32_t e2;
@@ -1417,7 +1417,7 @@ int uc_check_cpu_x86_load_seg(CPUX86State *env, int seg_reg, int sel)
                 && (!(env->hflags & HF_CS64_MASK) || cpl == 3)
 #endif
                 ) {
-                return UC_ERR_EXCEPTION;
+                return QC_ERR_EXCEPTION;
             }
             return 0;
         } else {
@@ -1428,43 +1428,43 @@ int uc_check_cpu_x86_load_seg(CPUX86State *env, int seg_reg, int sel)
             }
             index = selector & ~7;
             if ((index + 7) > dt->limit) {
-                return UC_ERR_EXCEPTION;
+                return QC_ERR_EXCEPTION;
             }
             ptr = dt->base + index;
             e2 = cpu_ldl_kernel(env, ptr + 4);
 
             if (!(e2 & DESC_S_MASK)) {
-                return UC_ERR_EXCEPTION;
+                return QC_ERR_EXCEPTION;
             }
             rpl = selector & 3;
             dpl = (e2 >> DESC_DPL_SHIFT) & 3;
             if (seg_reg == R_SS) {
                 /* must be writable segment */
                 if ((e2 & DESC_CS_MASK) || !(e2 & DESC_W_MASK)) {
-                    return UC_ERR_EXCEPTION;
+                    return QC_ERR_EXCEPTION;
                 }
                 if (rpl != cpl || dpl != cpl) {
-                    return UC_ERR_EXCEPTION;
+                    return QC_ERR_EXCEPTION;
                 }
             } else {
                 /* must be readable segment */
                 if ((e2 & (DESC_CS_MASK | DESC_R_MASK)) == DESC_CS_MASK) {
-                    return UC_ERR_EXCEPTION;
+                    return QC_ERR_EXCEPTION;
                 }
 
                 if (!(e2 & DESC_CS_MASK) || !(e2 & DESC_C_MASK)) {
                     /* if not conforming code, test rights */
                     if (dpl < cpl || dpl < rpl) {
-                        return UC_ERR_EXCEPTION;
+                        return QC_ERR_EXCEPTION;
                     }
                 }
             }
 
             if (!(e2 & DESC_P_MASK)) {
                 if (seg_reg == R_SS) {
-                    return UC_ERR_EXCEPTION;
+                    return QC_ERR_EXCEPTION;
                 } else {
-                    return UC_ERR_EXCEPTION;
+                    return QC_ERR_EXCEPTION;
                 }
             }
         }
@@ -2349,13 +2349,13 @@ void helper_sysenter(CPUX86State *env, int next_eip_addend)
     // Unicorn: call registered SYSENTER hooks
     struct hook *hook;
     HOOK_FOREACH_VAR_DECLARE;
-    HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
+    HOOK_FOREACH(env->uc, hook, QC_HOOK_INSN) {
         if (hook->to_delete)
             continue;
         if (!HOOK_BOUND_CHECK(hook, env->eip))
             continue;
-        if (hook->insn == UC_X86_INS_SYSENTER)
-            ((uc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
+        if (hook->insn == QC_X86_INS_SYSENTER)
+            ((qc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
 
         // the last callback may already asked to stop emulation
         if (env->uc->stop_request)

@@ -23,6 +23,6 @@
 #include "exec/cpu-common.h"
 
 /* cputlb.c */
-void tlb_protect_code(struct uc_struct *uc, ram_addr_t ram_addr);
-void tlb_unprotect_code(struct uc_struct *uc, ram_addr_t ram_addr);
+void tlb_protect_code(struct qc_struct *uc, ram_addr_t ram_addr);
+void tlb_unprotect_code(struct qc_struct *uc, ram_addr_t ram_addr);
 #endif

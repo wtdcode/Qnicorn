@@ -4,7 +4,7 @@
 #ifndef UC_QEMU_H
 #define UC_QEMU_H
 
-struct uc_struct;
+struct qc_struct;
 
 #define OPC_BUF_SIZE 640
 

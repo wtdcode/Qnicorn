@@ -72,7 +72,7 @@ static TCGv_i32 cpu_access_type;
 
 #include "exec/gen-icount.h"
 
-void ppc_translate_init(struct uc_struct *uc)
+void ppc_translate_init(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     int i;
@@ -178,7 +178,7 @@ struct DisasContext {
     uint64_t insns_flags2;
 
     // Unicorn
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 /* Return true iff byteswap is needed in a scalar memop */
@@ -7615,7 +7615,7 @@ static bool ppc_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cs,
 static void ppc_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
-    struct uc_struct *uc = ctx->uc;
+    struct qc_struct *uc = ctx->uc;
     PowerPCCPU *cpu = POWERPC_CPU(cs);
     CPUPPCState *env = cs->env_ptr;
     TCGContext *tcg_ctx = ctx->uc->tcg_ctx;
@@ -7626,14 +7626,14 @@ static void ppc_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
               ctx->base.pc_next, ctx->mem_idx, (int)msr_ir);
 
     // Unicorn: end address tells us to stop emulation
-    if (uc_addr_is_exit(uc, ctx->base.pc_next)) {
+    if (qc_addr_is_exit(uc, ctx->base.pc_next)) {
         gen_wait(ctx);
         return;
     }
 
     // Unicorn: trace this instruction on request
-    if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_CODE, ctx->base.pc_next)) {
-        gen_uc_tracecode(tcg_ctx, 4, UC_HOOK_CODE_IDX, uc, ctx->base.pc_next);
+    if (HOOK_EXISTS_BOUNDED(uc, QC_HOOK_CODE, ctx->base.pc_next)) {
+        gen_qc_tracecode(tcg_ctx, 4, QC_HOOK_CODE_IDX, uc, ctx->base.pc_next);
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);
     }

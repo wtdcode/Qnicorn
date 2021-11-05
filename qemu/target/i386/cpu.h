@@ -1589,7 +1589,7 @@ typedef struct CPUX86State {
     unsigned pkg_offset;
 
     // Unicorn engine
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 } CPUX86State;
 
 /**
@@ -1950,7 +1950,7 @@ static inline target_long lshift(target_long x, int n)
 #define ST1    ST(1)
 
 /* translate.c */
-void tcg_x86_init(struct uc_struct *uc);
+void tcg_x86_init(struct qc_struct *uc);
 
 typedef CPUX86State CPUArchState;
 typedef X86CPU ArchCPU;
@@ -2128,7 +2128,7 @@ void x86_cpu_xrstor_all_areas(X86CPU *cpu, const X86XSaveArea *buf);
 void x86_cpu_xsave_all_areas(X86CPU *cpu, X86XSaveArea *buf);
 void x86_update_hflags(CPUX86State* env);
 
-int uc_check_cpu_x86_load_seg(CPUX86State *env, int seg_reg, int sel);
-X86CPU *cpu_x86_init(struct uc_struct *uc);
+int qc_check_cpu_x86_load_seg(CPUX86State *env, int seg_reg, int sel);
+X86CPU *cpu_x86_init(struct qc_struct *uc);
 
 #endif /* I386_CPU_H */

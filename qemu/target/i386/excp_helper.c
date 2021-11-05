@@ -24,7 +24,7 @@
 #include "exec/helper-proto.h"
 #include "sysemu/sysemu.h"
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 void helper_raise_interrupt(CPUX86State *env, int intno, int next_eip_addend)
 {

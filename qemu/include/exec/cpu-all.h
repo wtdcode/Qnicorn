@@ -24,7 +24,7 @@
 #include "qemu/thread.h"
 #include "hw/core/cpu.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 #if 0
 #include "qemu/rcu.h"
@@ -352,7 +352,7 @@ CPUArchState *cpu_copy(CPUArchState *env);
  * @addr: virtual address to test (must be page aligned)
  * @tlb_addr: TLB entry address (a CPUTLBEntry addr_read/write/code value)
  */
-static inline bool tlb_hit_page(struct uc_struct *uc, target_ulong tlb_addr, target_ulong addr)
+static inline bool tlb_hit_page(struct qc_struct *uc, target_ulong tlb_addr, target_ulong addr)
 {
     return addr == (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK));
 }
@@ -363,7 +363,7 @@ static inline bool tlb_hit_page(struct uc_struct *uc, target_ulong tlb_addr, tar
  * @addr: virtual address to test (need not be page aligned)
  * @tlb_addr: TLB entry address (a CPUTLBEntry addr_read/write/code value)
  */
-static inline bool tlb_hit(struct uc_struct *uc, target_ulong tlb_addr, target_ulong addr)
+static inline bool tlb_hit(struct qc_struct *uc, target_ulong tlb_addr, target_ulong addr)
 {
     return tlb_hit_page(uc, tlb_addr, addr & TARGET_PAGE_MASK);
 }
@@ -371,7 +371,7 @@ static inline bool tlb_hit(struct uc_struct *uc, target_ulong tlb_addr, target_u
 int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
                         void *ptr, target_ulong len, bool is_write);
 
-int cpu_exec(struct uc_struct *uc, CPUState *cpu);
+int cpu_exec(struct qc_struct *uc, CPUState *cpu);
 
 /**
  * cpu_set_cpustate_pointers(cpu)

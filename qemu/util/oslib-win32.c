@@ -30,7 +30,7 @@
  * see the license comment there.
  */
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 #include "qemu/osdep.h"
 #include <windows.h>
@@ -71,7 +71,7 @@ static int get_allocation_granularity(void)
     return system_info.dwAllocationGranularity;
 }
 
-void *qemu_anon_ram_alloc(struct uc_struct *uc, size_t size, uint64_t *align)
+void *qemu_anon_ram_alloc(struct qc_struct *uc, size_t size, uint64_t *align)
 {
     void *ptr;
 
@@ -92,7 +92,7 @@ void qemu_vfree(void *ptr)
     }
 }
 
-void qemu_anon_ram_free(struct uc_struct *uc, void *ptr, size_t size)
+void qemu_anon_ram_free(struct qc_struct *uc, void *ptr, size_t size)
 {
     //trace_qemu_anon_ram_free(ptr, size);
     if (ptr) {

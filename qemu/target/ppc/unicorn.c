@@ -7,7 +7,7 @@
 #include "sysemu/cpus.h"
 #include "cpu.h"
 #include "unicorn_common.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 #include "unicorn.h"
 
 #ifdef TARGET_PPC64
@@ -31,7 +31,7 @@ static uint64_t ppc_mem_redirect(uint64_t address)
     return address;
 }
 
-static void ppc_set_pc(struct uc_struct *uc, uint64_t address)
+static void ppc_set_pc(struct qc_struct *uc, uint64_t address)
 {
     ((CPUPPCState *)uc->cpu->env_ptr)->nip = address;
 }
@@ -70,7 +70,7 @@ static void ppc_release(void *ctx)
     ppc_cpu_unrealize(tcg_ctx->uc->cpu);
 }
 
-void ppc_reg_reset(struct uc_struct *uc)
+void ppc_reg_reset(struct qc_struct *uc)
 {
     CPUArchState *env;
     env = uc->cpu->env_ptr;
@@ -81,19 +81,19 @@ void ppc_reg_reset(struct uc_struct *uc)
 
 static void reg_read(CPUPPCState *env, unsigned int regid, void *value)
 {
-    if (regid >= UC_PPC_REG_0 && regid <= UC_PPC_REG_31)
-        *(ppcreg_t *)value = env->gpr[regid - UC_PPC_REG_0];
+    if (regid >= QC_PPC_REG_0 && regid <= QC_PPC_REG_31)
+        *(ppcreg_t *)value = env->gpr[regid - QC_PPC_REG_0];
     else {
         switch (regid) {
         default:
             break;
-        case UC_PPC_REG_PC:
+        case QC_PPC_REG_PC:
             *(ppcreg_t *)value = env->nip;
             break;
-            /*          case UC_PPC_REG_CP0_CONFIG3:
+            /*          case QC_PPC_REG_CP0_CONFIG3:
                             *(mipsreg_t *)value = env->CP0_Config3;
                             break;
-                        case UC_MIPS_REG_CP0_USERLOCAL:
+                        case QC_MIPS_REG_CP0_USERLOCAL:
                             *(mipsreg_t *)value = env->active_tc.CP0_UserLocal;
                             break;                              */
         }
@@ -104,19 +104,19 @@ static void reg_read(CPUPPCState *env, unsigned int regid, void *value)
 
 static void reg_write(CPUPPCState *env, unsigned int regid, const void *value)
 {
-    if (regid >= UC_PPC_REG_0 && regid <= UC_PPC_REG_31)
-        env->gpr[regid - UC_PPC_REG_0] = *(ppcreg_t *)value;
+    if (regid >= QC_PPC_REG_0 && regid <= QC_PPC_REG_31)
+        env->gpr[regid - QC_PPC_REG_0] = *(ppcreg_t *)value;
     else {
         switch (regid) {
         default:
             break;
-        case UC_PPC_REG_PC:
+        case QC_PPC_REG_PC:
             env->nip = *(ppcreg_t *)value;
             break;
-            /*          case UC_MIPS_REG_CP0_CONFIG3:
+            /*          case QC_MIPS_REG_CP0_CONFIG3:
                             env->CP0_Config3 = *(mipsreg_t *)value;
                             break;
-                        case UC_MIPS_REG_CP0_USERLOCAL:
+                        case QC_MIPS_REG_CP0_USERLOCAL:
                             env->active_tc.CP0_UserLocal = *(mipsreg_t *)value;
                             break;                         */
         }
@@ -125,7 +125,7 @@ static void reg_write(CPUPPCState *env, unsigned int regid, const void *value)
     return;
 }
 
-int ppc_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals,
+int ppc_reg_read(struct qc_struct *uc, unsigned int *regs, void **vals,
                  int count)
 {
     CPUPPCState *env = &(POWERPC_CPU(uc->cpu)->env);
@@ -140,7 +140,7 @@ int ppc_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals,
     return 0;
 }
 
-int ppc_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
+int ppc_reg_write(struct qc_struct *uc, unsigned int *regs, void *const *vals,
                   int count)
 {
     CPUPPCState *env = &(POWERPC_CPU(uc->cpu)->env);
@@ -150,10 +150,10 @@ int ppc_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
         unsigned int regid = regs[i];
         const void *value = vals[i];
         reg_write(env, regid, value);
-        if (regid == UC_PPC_REG_PC) {
+        if (regid == QC_PPC_REG_PC) {
             // force to quit execution and flush TB
             uc->quit_request = true;
-            uc_emu_stop(uc);
+            qc_emu_stop(uc);
         }
     }
 
@@ -162,10 +162,10 @@ int ppc_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
 
 DEFAULT_VISIBILITY
 #ifdef TARGET_PPC64
-int ppc64_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+int ppc64_context_reg_read(struct qc_context *ctx, unsigned int *regs,
                            void **vals, int count)
 #else
-int ppc_context_reg_read(struct uc_context *ctx, unsigned int *regs,
+int ppc_context_reg_read(struct qc_context *ctx, unsigned int *regs,
                          void **vals, int count)
 #endif
 {
@@ -183,10 +183,10 @@ int ppc_context_reg_read(struct uc_context *ctx, unsigned int *regs,
 
 DEFAULT_VISIBILITY
 #ifdef TARGET_PPC64
-int ppc64_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+int ppc64_context_reg_write(struct qc_context *ctx, unsigned int *regs,
                             void *const *vals, int count)
 #else
-int ppc_context_reg_write(struct uc_context *ctx, unsigned int *regs,
+int ppc_context_reg_write(struct qc_context *ctx, unsigned int *regs,
                           void *const *vals, int count)
 #endif
 {
@@ -202,8 +202,8 @@ int ppc_context_reg_write(struct uc_context *ctx, unsigned int *regs,
     return 0;
 }
 
-PowerPCCPU *cpu_ppc_init(struct uc_struct *uc);
-static int ppc_cpus_init(struct uc_struct *uc, const char *cpu_model)
+PowerPCCPU *cpu_ppc_init(struct qc_struct *uc);
+static int ppc_cpus_init(struct qc_struct *uc, const char *cpu_model)
 {
     PowerPCCPU *cpu;
 
@@ -216,9 +216,9 @@ static int ppc_cpus_init(struct uc_struct *uc, const char *cpu_model)
 
 DEFAULT_VISIBILITY
 #ifdef TARGET_PPC64
-void ppc64_uc_init(struct uc_struct *uc)
+void ppc64_qc_init(struct qc_struct *uc)
 #else
-void ppc_uc_init(struct uc_struct *uc)
+void ppc_qc_init(struct qc_struct *uc)
 #endif
 {
     uc->reg_read = ppc_reg_read;
@@ -229,5 +229,5 @@ void ppc_uc_init(struct uc_struct *uc)
     uc->mem_redirect = ppc_mem_redirect;
     uc->cpus_init = ppc_cpus_init;
     uc->cpu_context_size = offsetof(CPUPPCState, uc);
-    uc_common_init(uc);
+    qc_common_init(uc);
 }

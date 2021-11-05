@@ -1839,7 +1839,7 @@ do_interrupt_x86_hardirq \
 x86_cpu_exec_interrupt \
 helper_lldt \
 helper_ltr \
-uc_check_cpu_x86_load_seg \
+qc_check_cpu_x86_load_seg \
 helper_load_seg \
 helper_ljmp_protected \
 helper_lcall_real \
@@ -4368,7 +4368,7 @@ helper_fcvt_d_wu \
 helper_fclass_d \
 riscv_raise_exception \
 helper_raise_exception \
-helper_uc_riscv_exit \
+helper_qc_riscv_exit \
 helper_csrrw \
 helper_csrrs \
 helper_csrrc \

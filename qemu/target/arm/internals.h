@@ -26,7 +26,7 @@
 #define TARGET_ARM_INTERNALS_H
 
 #include "hw/registerfields.h"
-struct uc_struct;
+struct qc_struct;
 
 /* register banks for CPU modes */
 #define BANK_USRSYS 0
@@ -172,7 +172,7 @@ static inline int r14_bank_number(int mode)
 }
 
 void arm_cpu_register_gdb_regs_for_features(ARMCPU *cpu);
-void arm_translate_init(struct uc_struct *uc);
+void arm_translate_init(struct qc_struct *uc);
 
 enum arm_fprounding {
     FPROUNDING_TIEEVEN,

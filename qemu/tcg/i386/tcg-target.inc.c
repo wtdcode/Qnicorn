@@ -1701,7 +1701,7 @@ static inline void tcg_out_tlb_load(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
                                     tcg_insn_unit **label_ptr, int which)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = s->uc;
+    struct qc_struct *uc = s->uc;
 #endif
     const TCGReg r0 = TCG_REG_L0;
     const TCGReg r1 = TCG_REG_L1;
@@ -1759,7 +1759,7 @@ static inline void tcg_out_tlb_load(TCGContext *s, TCGReg addrlo, TCGReg addrhi,
     tcg_out_mov(s, ttype, r1, addrlo);
 
     // Unicorn: fast path if hookmem is not enable
-    if (!HOOK_EXISTS(s->uc, UC_HOOK_MEM_READ) && !HOOK_EXISTS(s->uc, UC_HOOK_MEM_WRITE))
+    if (!HOOK_EXISTS(s->uc, QC_HOOK_MEM_READ) && !HOOK_EXISTS(s->uc, QC_HOOK_MEM_WRITE))
         tcg_out_opc(s, OPC_JCC_long + JCC_JNE, 0, 0, 0);
     else
         /* slow_path, so data access will go via load_helper() */

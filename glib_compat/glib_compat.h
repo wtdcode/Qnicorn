@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #ifndef __GLIB_COMPAT_H
 #define __GLIB_COMPAT_H
 
-#include "unicorn/platform.h"
+#include "qnicorn/platform.h"
 #include <stdarg.h>
 #include <stdlib.h>
 #include <assert.h>

@@ -24,7 +24,7 @@
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
 
-struct uc_struct;
+struct qc_struct;
 
 /* ARM processors have a weak memory model */
 #define TCG_GUEST_DEFAULT_MO      (0)
@@ -677,7 +677,7 @@ typedef struct CPUARMState {
     struct CPUWatchpoint *cpu_watchpoint[16];
 
     // Unicorn engine
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 } CPUARMState;
 
 /**

@@ -18,7 +18,7 @@
  * <http://www.gnu.org/licenses/gpl-2.0.html>
  */
 
-#include "uc_priv.h"
+#include "qc_priv.h"
 #include "qemu/osdep.h"
 #include "hw/core/cpu.h"
 #include "sysemu/tcg.h"
@@ -108,7 +108,7 @@ static int64_t cpu_common_get_arch_id(CPUState *cpu)
     return cpu->cpu_index;
 }
 
-void cpu_class_init(struct uc_struct *uc, CPUClass *k)
+void cpu_class_init(struct qc_struct *uc, CPUClass *k)
 {
     k->get_arch_id = cpu_common_get_arch_id;
     k->has_work = cpu_common_has_work;
@@ -124,7 +124,7 @@ void cpu_class_init(struct uc_struct *uc, CPUClass *k)
     return;
 }
 
-void cpu_common_initfn(struct uc_struct *uc, CPUState *cs)
+void cpu_common_initfn(struct qc_struct *uc, CPUState *cs)
 {
     CPUState *cpu = CPU(cs);
 
@@ -144,7 +144,7 @@ void cpu_common_initfn(struct uc_struct *uc, CPUState *cs)
     cpu->memory = cpu->uc->system_memory;
 }
 
-void cpu_stop(struct uc_struct *uc)
+void cpu_stop(struct qc_struct *uc)
 {
     if (uc->cpu) {
         uc->cpu->stop = false;

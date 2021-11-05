@@ -34,7 +34,7 @@
 #include "qemu/timer.h"
 #include "sysemu/cpus.h"
 #include "sysemu/tcg.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 static bool tb_exec_is_locked(TCGContext*);
 static void tb_exec_change(TCGContext*, bool locked);
@@ -164,7 +164,7 @@ QEMU_BUILD_BUG_ON(CPU_TRACE_DSTATE_MAX_EVENTS >
 #define V_L1_MAX_BITS (V_L2_BITS + 3)
 #define V_L1_MAX_SIZE (1 << V_L1_MAX_BITS)
 
-static void page_table_config_init(struct uc_struct *uc)
+static void page_table_config_init(struct qc_struct *uc)
 {
     uint32_t v_l1_bits;
 
@@ -241,7 +241,7 @@ static target_long decode_sleb128(uint8_t **pp)
    That is, the first column is seeded with the guest pc, the last column
    with the host pc, and the middle columns with zeros.  */
 
-static int encode_search(struct uc_struct *uc, TranslationBlock *tb, uint8_t *block)
+static int encode_search(struct qc_struct *uc, TranslationBlock *tb, uint8_t *block)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     uint8_t *highwater = tcg_ctx->code_gen_highwater;
@@ -323,7 +323,7 @@ bool cpu_restore_state(CPUState *cpu, uintptr_t host_pc, bool will_exit)
     TranslationBlock *tb;
     bool r = false;
     uintptr_t check_offset;
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 
     /* The host_pc has to be in the region of current code buffer. If
      * it is not we will not be able to resolve it here. The two cases
@@ -356,13 +356,13 @@ bool cpu_restore_state(CPUState *cpu, uintptr_t host_pc, bool will_exit)
     return r;
 }
 
-static void page_init(struct uc_struct *uc)
+static void page_init(struct qc_struct *uc)
 {
     page_size_init(uc);
     page_table_config_init(uc);
 }
 
-static PageDesc *page_find_alloc(struct uc_struct *uc, tb_page_addr_t index, int alloc)
+static PageDesc *page_find_alloc(struct qc_struct *uc, tb_page_addr_t index, int alloc)
 {
     PageDesc *pd;
     void **lp;
@@ -416,12 +416,12 @@ static PageDesc *page_find_alloc(struct uc_struct *uc, tb_page_addr_t index, int
     return pd + (index & (V_L2_SIZE - 1));
 }
 
-static inline PageDesc *page_find(struct uc_struct *uc, tb_page_addr_t index)
+static inline PageDesc *page_find(struct qc_struct *uc, tb_page_addr_t index)
 {
     return page_find_alloc(uc, index, 0);
 }
 
-static void page_lock_pair(struct uc_struct *uc, PageDesc **ret_p1, tb_page_addr_t phys1,
+static void page_lock_pair(struct qc_struct *uc, PageDesc **ret_p1, tb_page_addr_t phys1,
                            PageDesc **ret_p2, tb_page_addr_t phys2, int alloc);
 
 #ifdef CONFIG_DEBUG_TCG
@@ -503,12 +503,12 @@ static inline void page_unlock(PageDesc *pd)
 }
 
 /* lock the page(s) of a TB in the correct acquisition order */
-static inline void page_lock_tb(struct uc_struct *uc, const TranslationBlock *tb)
+static inline void page_lock_tb(struct qc_struct *uc, const TranslationBlock *tb)
 {
     page_lock_pair(uc, NULL, tb->page_addr[0], NULL, tb->page_addr[1], 0);
 }
 
-static inline void page_unlock_tb(struct uc_struct *uc, const TranslationBlock *tb)
+static inline void page_unlock_tb(struct qc_struct *uc, const TranslationBlock *tb)
 {
     PageDesc *p1 = page_find(uc, tb->page_addr[0] >> TARGET_PAGE_BITS);
 
@@ -588,7 +588,7 @@ static gboolean page_entry_unlock(gpointer key, gpointer value, gpointer data)
  * Trylock a page, and if successful, add the page to a collection.
  * Returns true ("busy") if the page could not be locked; false otherwise.
  */
-static bool page_trylock_add(struct uc_struct *uc, struct page_collection *set, tb_page_addr_t addr)
+static bool page_trylock_add(struct qc_struct *uc, struct page_collection *set, tb_page_addr_t addr)
 {
     tb_page_addr_t index = addr >> TARGET_PAGE_BITS;
     struct page_entry *pe;
@@ -648,7 +648,7 @@ static gint tb_page_addr_cmp(gconstpointer ap, gconstpointer bp, gpointer udata)
  * Locking order: acquire locks in ascending order of page index.
  */
 struct page_collection *
-page_collection_lock(struct uc_struct *uc, tb_page_addr_t start, tb_page_addr_t end)
+page_collection_lock(struct qc_struct *uc, tb_page_addr_t start, tb_page_addr_t end)
 {
     struct page_collection *set = g_malloc(sizeof(*set));
     tb_page_addr_t index;
@@ -705,7 +705,7 @@ void page_collection_unlock(struct page_collection *set)
     g_free(set);
 }
 
-static void page_lock_pair(struct uc_struct *uc, PageDesc **ret_p1, tb_page_addr_t phys1,
+static void page_lock_pair(struct qc_struct *uc, PageDesc **ret_p1, tb_page_addr_t phys1,
                            PageDesc **ret_p2, tb_page_addr_t phys2, int alloc)
 {
     PageDesc *p1, *p2;
@@ -834,7 +834,7 @@ static inline void *split_cross_256mb(TCGContext *tcg_ctx, void *buf1, size_t si
 static uint8_t static_code_gen_buffer[DEFAULT_CODE_GEN_BUFFER_SIZE]
     __attribute__((aligned(CODE_GEN_ALIGN)));
 
-static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
+static inline void *alloc_code_gen_buffer(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     void *buf = static_code_gen_buffer;
@@ -869,14 +869,14 @@ static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
     return buf;
 }
 #elif defined(_WIN32)
-static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
+static inline void *alloc_code_gen_buffer(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     size_t size = tcg_ctx->code_gen_buffer_size;
     return VirtualAlloc(NULL, size, MEM_RESERVE | MEM_COMMIT,
                         PAGE_EXECUTE_READWRITE);
 }
-void free_code_gen_buffer(struct uc_struct *uc)
+void free_code_gen_buffer(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     if (tcg_ctx->code_gen_buffer) {
@@ -884,7 +884,7 @@ void free_code_gen_buffer(struct uc_struct *uc)
     }
 }
 #else
-void free_code_gen_buffer(struct uc_struct *uc)
+void free_code_gen_buffer(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     if (tcg_ctx->code_gen_buffer) {
@@ -892,7 +892,7 @@ void free_code_gen_buffer(struct uc_struct *uc)
     }
 }
 
-static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
+static inline void *alloc_code_gen_buffer(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     int prot = PROT_WRITE | PROT_READ | PROT_EXEC;
@@ -948,7 +948,7 @@ static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
 }
 #endif /* USE_STATIC_CODE_GEN_BUFFER, WIN32, POSIX */
 
-static inline void code_gen_alloc(struct uc_struct *uc, size_t tb_size)
+static inline void code_gen_alloc(struct qc_struct *uc, size_t tb_size)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     tcg_ctx->code_gen_buffer_size = size_code_gen_buffer(tb_size);
@@ -959,7 +959,7 @@ static inline void code_gen_alloc(struct uc_struct *uc, size_t tb_size)
     }
 }
 
-static bool tb_cmp(struct uc_struct *uc, const void *ap, const void *bp)
+static bool tb_cmp(struct qc_struct *uc, const void *ap, const void *bp)
 {
     const TranslationBlock *a = ap;
     const TranslationBlock *b = bp;
@@ -973,7 +973,7 @@ static bool tb_cmp(struct uc_struct *uc, const void *ap, const void *bp)
         a->page_addr[1] == b->page_addr[1];
 }
 
-static void tb_htable_init(struct uc_struct *uc)
+static void tb_htable_init(struct qc_struct *uc)
 {
     unsigned int mode = QHT_MODE_AUTO_RESIZE;
 
@@ -981,7 +981,7 @@ static void tb_htable_init(struct uc_struct *uc)
 }
 
 
-static void uc_invalidate_tb(struct uc_struct *uc, uint64_t start_addr, size_t len) 
+static void qc_invalidate_tb(struct qc_struct *uc, uint64_t start_addr, size_t len) 
 {
     tb_page_addr_t start, end;
 
@@ -999,7 +999,7 @@ static void uc_invalidate_tb(struct uc_struct *uc, uint64_t start_addr, size_t l
     tb_invalidate_phys_range(uc, start, end);
 }
 
-static uc_err uc_gen_tb(struct uc_struct *uc, uint64_t addr, uc_tb *out_tb) 
+static qc_err qc_gen_tb(struct qc_struct *uc, uint64_t addr, qc_tb *out_tb) 
 {
     TranslationBlock *tb;
     target_ulong cs_base, pc;
@@ -1045,20 +1045,20 @@ static uc_err uc_gen_tb(struct uc_struct *uc, uint64_t addr, uc_tb *out_tb)
 
     // If we still couldn't generate a TB, it must be out of memory.
     if (tb == NULL) {
-        return UC_ERR_NOMEM;
+        return QC_ERR_NOMEM;
     }
 
     if (out_tb != NULL) {
-        UC_TB_COPY(out_tb, tb);
+        QC_TB_COPY(out_tb, tb);
     }
 
-    return UC_ERR_OK;
+    return QC_ERR_OK;
 }
 
 /* Must be called before using the QEMU cpus. 'tb_size' is the size
    (in bytes) allocated to the translation buffer. Zero means default
    size. */
-void tcg_exec_init(struct uc_struct *uc, unsigned long tb_size)
+void tcg_exec_init(struct qc_struct *uc, unsigned long tb_size)
 {
     /* remove tcg object. init here. */
     /* tcg class init: tcg-all.c:tcg_accel_class_init(), skip all. */
@@ -1076,8 +1076,8 @@ void tcg_exec_init(struct uc_struct *uc, unsigned long tb_size)
     /* cpu_interrupt_handler is not used in uc1 */
     uc->l1_map = g_malloc0(sizeof(void *) * V_L1_MAX_SIZE);
     /* Invalidate / Cache TBs */
-    uc->uc_invalidate_tb = uc_invalidate_tb;
-    uc->uc_gen_tb = uc_gen_tb;
+    uc->qc_invalidate_tb = qc_invalidate_tb;
+    uc->qc_gen_tb = qc_gen_tb;
 }
 
 /* call with @p->lock held */
@@ -1114,7 +1114,7 @@ static void tb_clean_internal(void **p, int x)
     }
 }
 
-void tb_cleanup(struct uc_struct *uc)
+void tb_cleanup(struct qc_struct *uc)
 {
     int i, x;
     void **p;
@@ -1144,7 +1144,7 @@ void tb_cleanup(struct uc_struct *uc)
 }
 
 /* Set to NULL all the 'first_tb' fields in all PageDescs. */
-static void page_flush_tb_1(struct uc_struct *uc, int level, void **lp)
+static void page_flush_tb_1(struct qc_struct *uc, int level, void **lp)
 {
     int i;
 
@@ -1169,7 +1169,7 @@ static void page_flush_tb_1(struct uc_struct *uc, int level, void **lp)
     }
 }
 
-static void page_flush_tb(struct uc_struct *uc)
+static void page_flush_tb(struct qc_struct *uc)
 {
     int i, l1_sz = uc->v_l1_size;
 
@@ -1333,7 +1333,7 @@ static inline void tb_jmp_unlink(TranslationBlock *dest)
 static void do_tb_phys_invalidate(TCGContext *tcg_ctx, TranslationBlock *tb, bool rm_from_page_list)
 {
     CPUState *cpu = tcg_ctx->uc->cpu;
-    struct uc_struct *uc = tcg_ctx->uc;
+    struct qc_struct *uc = tcg_ctx->uc;
     PageDesc *p;
     uint32_t h;
     tb_page_addr_t phys_pc;
@@ -1407,7 +1407,7 @@ void tb_phys_invalidate(TCGContext *tcg_ctx, TranslationBlock *tb, tb_page_addr_
 }
 
 /* call with @p->lock held */
-static void build_page_bitmap(struct uc_struct *uc, PageDesc *p)
+static void build_page_bitmap(struct qc_struct *uc, PageDesc *p)
 {
     int n, tb_start, tb_end;
     TranslationBlock *tb;
@@ -1438,7 +1438,7 @@ static void build_page_bitmap(struct uc_struct *uc, PageDesc *p)
  * Called with mmap_lock held for user-mode emulation.
  * Called with @p->lock held in !user-mode.
  */
-static inline void tb_page_add(struct uc_struct *uc, PageDesc *p, TranslationBlock *tb,
+static inline void tb_page_add(struct qc_struct *uc, PageDesc *p, TranslationBlock *tb,
                                unsigned int n, tb_page_addr_t page_addr)
 {
     bool page_already_protected;
@@ -1470,7 +1470,7 @@ static inline void tb_page_add(struct uc_struct *uc, PageDesc *p, TranslationBlo
  * the caller should discard the original @tb, and use instead the returned TB.
  */
 static TranslationBlock *
-tb_link_page(struct uc_struct *uc, TranslationBlock *tb, tb_page_addr_t phys_pc,
+tb_link_page(struct qc_struct *uc, TranslationBlock *tb, tb_page_addr_t phys_pc,
              tb_page_addr_t phys_page2)
 {
     PageDesc *p;
@@ -1541,7 +1541,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
                               uint32_t flags, int cflags)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
     TCGContext *tcg_ctx = cpu->uc->tcg_ctx;
     CPUArchState *env = cpu->env_ptr;
@@ -1703,7 +1703,7 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
  * !user-mode: call with all @pages locked.
  */
 static void
-tb_invalidate_phys_page_range__locked(struct uc_struct *uc, struct page_collection *pages,
+tb_invalidate_phys_page_range__locked(struct qc_struct *uc, struct page_collection *pages,
                                       PageDesc *p, tb_page_addr_t start,
                                       tb_page_addr_t end,
                                       uintptr_t retaddr)
@@ -1798,7 +1798,7 @@ tb_invalidate_phys_page_range__locked(struct uc_struct *uc, struct page_collecti
  *
  * Called with mmap_lock held for user-mode emulation
  */
-void tb_invalidate_phys_page_range(struct uc_struct *uc, tb_page_addr_t start, tb_page_addr_t end)
+void tb_invalidate_phys_page_range(struct qc_struct *uc, tb_page_addr_t start, tb_page_addr_t end)
 {
     struct page_collection *pages;
     PageDesc *p;
@@ -1823,7 +1823,7 @@ void tb_invalidate_phys_page_range(struct uc_struct *uc, tb_page_addr_t start, t
  *
  * Called with mmap_lock held for user-mode emulation.
  */
-void tb_invalidate_phys_range(struct uc_struct *uc, ram_addr_t start, ram_addr_t end)
+void tb_invalidate_phys_range(struct qc_struct *uc, ram_addr_t start, ram_addr_t end)
 {
     struct page_collection *pages;
     tb_page_addr_t next;
@@ -1852,7 +1852,7 @@ void tb_invalidate_phys_range(struct uc_struct *uc, ram_addr_t start, ram_addr_t
  *
  * Call with all @pages in the range [@start, @start + len[ locked.
  */
-void tb_invalidate_phys_page_fast(struct uc_struct *uc, struct page_collection *pages,
+void tb_invalidate_phys_page_fast(struct qc_struct *uc, struct page_collection *pages,
                                   tb_page_addr_t start, int len,
                                   uintptr_t retaddr)
 {
@@ -1992,7 +1992,7 @@ static void tb_jmp_cache_clear_page(CPUState *cpu, target_ulong page_addr)
 void tb_flush_jmp_cache(CPUState *cpu, target_ulong addr)
 {
 #ifdef TARGET_ARM
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
 #endif
 
     /* Discard jump cache entries for any tb which might potentially
@@ -2002,7 +2002,7 @@ void tb_flush_jmp_cache(CPUState *cpu, target_ulong addr)
 }
 
 /* This is a wrapper for common code that can not use CONFIG_SOFTMMU */
-void tcg_flush_softmmu_tlb(struct uc_struct *uc)
+void tcg_flush_softmmu_tlb(struct qc_struct *uc)
 {
     tlb_flush(uc->cpu);
 }

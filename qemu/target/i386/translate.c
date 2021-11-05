@@ -29,8 +29,8 @@
 #include "exec/helper-gen.h"
 #include "qemu/compiler.h"
 
-#include "unicorn/platform.h"
-#include "uc_priv.h"
+#include "qnicorn/platform.h"
+#include "qc_priv.h"
 
 #define PREFIX_REPZ   0x01
 #define PREFIX_REPNZ  0x02
@@ -185,7 +185,7 @@ typedef struct DisasContext {
     sigjmp_buf jmpbuf;
 
     // Unicorn
-    struct uc_struct *uc;
+    struct qc_struct *uc;
     target_ulong prev_pc; /* save address of the previous instruction */
 } DisasContext;
 
@@ -536,7 +536,7 @@ static inline void gen_op_ld_v(DisasContext *s, int idx, TCGv t0, TCGv a0)
 {
     TCGContext *tcg_ctx = s->uc->tcg_ctx;
 
-    if (HOOK_EXISTS(s->uc, UC_HOOK_MEM_READ))
+    if (HOOK_EXISTS(s->uc, QC_HOOK_MEM_READ))
         gen_jmp_im(s, s->prev_pc); // Unicorn: sync EIP
 
     tcg_gen_qemu_ld_tl(tcg_ctx, t0, a0, s->mem_index, idx | MO_LE);
@@ -546,7 +546,7 @@ static inline void gen_op_st_v(DisasContext *s, int idx, TCGv t0, TCGv a0)
 {
     TCGContext *tcg_ctx = s->uc->tcg_ctx;
 
-    if (HOOK_EXISTS(s->uc, UC_HOOK_MEM_WRITE))
+    if (HOOK_EXISTS(s->uc, QC_HOOK_MEM_WRITE))
         gen_jmp_im(s, s->prev_pc); // Unicorn: sync EIP
 
     tcg_gen_qemu_st_tl(tcg_ctx, t0, a0, s->mem_index, idx | MO_LE);
@@ -1479,7 +1479,7 @@ static void gen_illegal_opcode(DisasContext *s)
 static void gen_op(DisasContext *s1, int op, MemOp ot, int d)
 {
     TCGContext *tcg_ctx = s1->uc->tcg_ctx;
-    uc_engine *uc = s1->uc;
+    qc_engine *uc = s1->uc;
 
     if (d != OR_TMP0) {
         if (s1->prefix & PREFIX_LOCK) {
@@ -1544,15 +1544,15 @@ static void gen_op(DisasContext *s1, int op, MemOp ot, int d)
             gen_op_st_rm_T0_A0(s1, ot, d);
         }
         
-        if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_TCG_OPCODE, s1->pc_start)) {
+        if (HOOK_EXISTS_BOUNDED(uc, QC_HOOK_TCG_OPCODE, s1->pc_start)) {
             struct hook *hook;
             HOOK_FOREACH_VAR_DECLARE;
-            HOOK_FOREACH(uc, hook, UC_HOOK_TCG_OPCODE) {
+            HOOK_FOREACH(uc, hook, QC_HOOK_TCG_OPCODE) {
                 if (hook->to_delete)
                     continue;
-                if (hook->op == UC_TCG_OP_SUB && (hook->op_flags & UC_TCG_OP_FLAG_DIRECT) ) {
+                if (hook->op == QC_TCG_OP_SUB && (hook->op_flags & QC_TCG_OP_FLAG_DIRECT) ) {
                     // TCGv is just an offset to tcg_ctx so it's safe to do so.
-                    gen_uc_traceopcode(tcg_ctx, hook, (TCGv_i64)s1->T0, (TCGv_i64)s1->T1, uc, s1->pc_start);
+                    gen_qc_traceopcode(tcg_ctx, hook, (TCGv_i64)s1->T0, (TCGv_i64)s1->T1, uc, s1->pc_start);
                 }
             }
         }
@@ -1599,15 +1599,15 @@ static void gen_op(DisasContext *s1, int op, MemOp ot, int d)
         tcg_gen_mov_tl(tcg_ctx, s1->cc_srcT, s1->T0);
         tcg_gen_sub_tl(tcg_ctx, tcg_ctx->cpu_cc_dst, s1->T0, s1->T1);
 
-        if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_TCG_OPCODE, s1->pc_start)) {
+        if (HOOK_EXISTS_BOUNDED(uc, QC_HOOK_TCG_OPCODE, s1->pc_start)) {
             struct hook *hook;
             HOOK_FOREACH_VAR_DECLARE;
-            HOOK_FOREACH(uc, hook, UC_HOOK_TCG_OPCODE) {
+            HOOK_FOREACH(uc, hook, QC_HOOK_TCG_OPCODE) {
                 if (hook->to_delete)
                     continue;
-                if (hook->op == UC_TCG_OP_SUB && (hook->op_flags & UC_TCG_OP_FLAG_CMP) ) {
+                if (hook->op == QC_TCG_OP_SUB && (hook->op_flags & QC_TCG_OP_FLAG_CMP) ) {
                     // TCGv is just an offset to tcg_ctx so it's safe to do so.
-                    gen_uc_traceopcode(tcg_ctx, hook, (TCGv_i64)s1->T0, (TCGv_i64)s1->T1, uc, s1->pc_start);
+                    gen_qc_traceopcode(tcg_ctx, hook, (TCGv_i64)s1->T0, (TCGv_i64)s1->T1, uc, s1->pc_start);
                 }
             }
         }
@@ -4794,7 +4794,7 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
     s->uc = env->uc;
 
     // Unicorn: end address tells us to stop emulation
-    if (uc_addr_is_exit(env->uc, s->pc)) {
+    if (qc_addr_is_exit(env->uc, s->pc)) {
         // imitate the HLT instruction
         gen_update_cc_op(s);
         gen_jmp_im(s, pc_start - s->cs_base);
@@ -4805,7 +4805,7 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
 
     // Unicorn: callback might need to access to EFLAGS,
     // or want to stop emulation immediately
-    if (HOOK_EXISTS_BOUNDED(env->uc, UC_HOOK_CODE, pc_start)) {
+    if (HOOK_EXISTS_BOUNDED(env->uc, QC_HOOK_CODE, pc_start)) {
         if (s->last_cc_op != s->cc_op) {
             sync_eflags(s, tcg_ctx);
             s->last_cc_op = s->cc_op;
@@ -4814,7 +4814,7 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
         // save the last operand
         prev_op = tcg_last_op(tcg_ctx);
         insn_hook = true;
-        gen_uc_tracecode(tcg_ctx, 0xf1f1f1f1, UC_HOOK_CODE_IDX, env->uc, pc_start);
+        gen_qc_tracecode(tcg_ctx, 0xf1f1f1f1, QC_HOOK_CODE_IDX, env->uc, pc_start);
 
         check_exit_request(tcg_ctx);
     }
@@ -9124,7 +9124,7 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
         if (prev_op) {
             // As explained further up in the function where prev_op is
             // assigned, we move forward in the tail queue, so we're modifying the
-            // move instruction generated by gen_uc_tracecode() that contains
+            // move instruction generated by gen_qc_tracecode() that contains
             // the instruction size to assign the proper size (replacing 0xF1F1F1F1).
             tcg_op = QTAILQ_NEXT(prev_op, link);
         } else {
@@ -9146,7 +9146,7 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
     return s->pc;
 }
 
-void tcg_x86_init(struct uc_struct *uc)
+void tcg_x86_init(struct qc_struct *uc)
 {
     static const char reg_names[CPU_NB_REGS][4] = {
 #ifdef TARGET_X86_64

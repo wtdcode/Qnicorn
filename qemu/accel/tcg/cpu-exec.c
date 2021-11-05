@@ -27,7 +27,7 @@
 #include "exec/tb-hash.h"
 #include "exec/tb-lookup.h"
 #include "sysemu/cpus.h"
-#include "uc_priv.h"
+#include "qc_priv.h"
 
 /* -icount align implementation. */
 
@@ -69,22 +69,22 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, TranslationBlock *itb)
          * of the start of the TB.
          */
         CPUClass *cc = CPU_GET_CLASS(cpu);
-        if (!HOOK_EXISTS(env->uc, UC_HOOK_CODE) && !env->uc->timeout) {
+        if (!HOOK_EXISTS(env->uc, QC_HOOK_CODE) && !env->uc->timeout) {
             // We should sync pc for R/W error.
             switch (env->uc->invalid_error) {
-                case UC_ERR_WRITE_PROT:
-                case UC_ERR_READ_PROT:
-                case UC_ERR_FETCH_PROT:
-                case UC_ERR_WRITE_UNMAPPED:
-                case UC_ERR_READ_UNMAPPED:
-                case UC_ERR_FETCH_UNMAPPED:
-                case UC_ERR_WRITE_UNALIGNED:
-                case UC_ERR_READ_UNALIGNED:
-                case UC_ERR_FETCH_UNALIGNED:
+                case QC_ERR_WRITE_PROT:
+                case QC_ERR_READ_PROT:
+                case QC_ERR_FETCH_PROT:
+                case QC_ERR_WRITE_UNMAPPED:
+                case QC_ERR_READ_UNMAPPED:
+                case QC_ERR_FETCH_UNMAPPED:
+                case QC_ERR_WRITE_UNALIGNED:
+                case QC_ERR_READ_UNALIGNED:
+                case QC_ERR_FETCH_UNALIGNED:
                     break;
                 default:
                     if (cc->synchronize_from_tb) {
-                        // avoid sync twice when helper_uc_tracecode() already did this.
+                        // avoid sync twice when helper_qc_tracecode() already did this.
                         if (env->uc->emu_counter <= env->uc->emu_count &&
                                 !env->uc->stop_request && !env->uc->quit_request)
                         cc->synchronize_from_tb(cpu, last_tb);
@@ -141,7 +141,7 @@ struct tb_desc {
     uint32_t trace_vcpu_dstate;
 };
 
-static bool tb_lookup_cmp(struct uc_struct *uc, const void *p, const void *d)
+static bool tb_lookup_cmp(struct qc_struct *uc, const void *p, const void *d)
 {
     const TranslationBlock *tb = p;
     const struct tb_desc *desc = d;
@@ -173,7 +173,7 @@ TranslationBlock *tb_htable_lookup(CPUState *cpu, target_ulong pc,
                                    target_ulong cs_base, uint32_t flags,
                                    uint32_t cf_mask)
 {
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
     tb_page_addr_t phys_pc;
     struct tb_desc desc;
     uint32_t h;
@@ -245,8 +245,8 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
     TranslationBlock *tb;
     target_ulong cs_base, pc;
     uint32_t flags;
-    uc_tb cur_tb, prev_tb;
-    uc_engine *uc = cpu->uc;
+    qc_tb cur_tb, prev_tb;
+    qc_engine *uc = cpu->uc;
     struct list_item *cur;
     struct hook *hook;
 
@@ -270,18 +270,18 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
         tb_add_jump(last_tb, tb_exit, tb);
     }
 
-    UC_TB_COPY(&cur_tb, tb);
+    QC_TB_COPY(&cur_tb, tb);
 
     if (last_tb) {
-        UC_TB_COPY(&prev_tb, last_tb);
-        for (cur = uc->hook[UC_HOOK_EDGE_GENERATED_IDX].head;
+        QC_TB_COPY(&prev_tb, last_tb);
+        for (cur = uc->hook[QC_HOOK_EDGE_GENERATED_IDX].head;
             cur != NULL && (hook = (struct hook *)cur->data); cur = cur->next) {
             if (hook->to_delete) {
                 continue;
             }
 
             if (HOOK_BOUND_CHECK(hook, (uint64_t)tb->pc)) {
-                ((uc_hook_edge_gen_t)hook->callback)(uc, &cur_tb, &prev_tb, hook->user_data);
+                ((qc_hook_edge_gen_t)hook->callback)(uc, &cur_tb, &prev_tb, hook->user_data);
             }
         }
     }
@@ -329,7 +329,7 @@ static inline void cpu_handle_debug_exception(CPUState *cpu)
 static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
 {
     bool catched = false;
-    struct uc_struct *uc = cpu->uc;
+    struct qc_struct *uc = cpu->uc;
     struct hook *hook;
 
     // printf(">> exception index = %u\n", cpu->exception_index); qq
@@ -338,17 +338,17 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         // Unicorn: call registered invalid instruction callbacks
         catched = false;
         HOOK_FOREACH_VAR_DECLARE;
-        HOOK_FOREACH(uc, hook, UC_HOOK_INSN_INVALID) {
+        HOOK_FOREACH(uc, hook, QC_HOOK_INSN_INVALID) {
             if (hook->to_delete) {
                 continue;
             }
-            catched = ((uc_cb_hookinsn_invalid_t)hook->callback)(uc, hook->user_data);
+            catched = ((qc_cb_hookinsn_invalid_t)hook->callback)(uc, hook->user_data);
             if (catched) {
                 break;
             }
         }
         if (!catched) {
-            uc->invalid_error = UC_ERR_INSN_INVALID;
+            uc->invalid_error = QC_ERR_INSN_INVALID;
         }
 
         // we want to stop emulation
@@ -388,17 +388,17 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         // Unicorn: call registered interrupt callbacks
         catched = false;
         HOOK_FOREACH_VAR_DECLARE;
-        HOOK_FOREACH(uc, hook, UC_HOOK_INTR) {
+        HOOK_FOREACH(uc, hook, QC_HOOK_INTR) {
             if (hook->to_delete) {
                 continue;
             }
-            ((uc_cb_hookintr_t)hook->callback)(uc, cpu->exception_index, hook->user_data);
+            ((qc_cb_hookintr_t)hook->callback)(uc, cpu->exception_index, hook->user_data);
             catched = true;
         }
         // Unicorn: If un-catched interrupt, stop executions.
         if (!catched) {
             // printf("AAAAAAAAAAAA\n"); qq
-            uc->invalid_error = UC_ERR_EXCEPTION;
+            uc->invalid_error = QC_ERR_EXCEPTION;
             cpu->halted = 1;
             *ret = EXCP_HLT;
             return true;
@@ -530,7 +530,7 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
 }
 
 /* main execution loop */
-int cpu_exec(struct uc_struct *uc, CPUState *cpu)
+int cpu_exec(struct qc_struct *uc, CPUState *cpu)
 {
     CPUClass *cc = CPU_GET_CLASS(cpu);
     int ret;

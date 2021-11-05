@@ -20,7 +20,7 @@
  */
 
 /* warning: addr must be aligned */
-static inline uint32_t glue(address_space_ldl_internal, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+static inline uint32_t glue(address_space_ldl_internal, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result,
     enum device_endian endian)
 {
@@ -63,21 +63,21 @@ static inline uint32_t glue(address_space_ldl_internal, SUFFIX)(struct uc_struct
     return val;
 }
 
-uint32_t glue(address_space_ldl, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint32_t glue(address_space_ldl, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_ldl_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
                                                     DEVICE_NATIVE_ENDIAN);
 }
 
-uint32_t glue(address_space_ldl_le, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint32_t glue(address_space_ldl_le, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_ldl_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
                                                     DEVICE_LITTLE_ENDIAN);
 }
 
-uint32_t glue(address_space_ldl_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint32_t glue(address_space_ldl_be, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_ldl_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
@@ -85,7 +85,7 @@ uint32_t glue(address_space_ldl_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
 }
 
 /* warning: addr must be aligned */
-static inline uint64_t glue(address_space_ldq_internal, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+static inline uint64_t glue(address_space_ldq_internal, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result,
     enum device_endian endian)
 {
@@ -128,28 +128,28 @@ static inline uint64_t glue(address_space_ldq_internal, SUFFIX)(struct uc_struct
     return val;
 }
 
-uint64_t glue(address_space_ldq, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint64_t glue(address_space_ldq, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_ldq_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
                                                     DEVICE_NATIVE_ENDIAN);
 }
 
-uint64_t glue(address_space_ldq_le, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint64_t glue(address_space_ldq_le, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_ldq_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
                                                     DEVICE_LITTLE_ENDIAN);
 }
 
-uint64_t glue(address_space_ldq_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint64_t glue(address_space_ldq_be, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_ldq_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
                                                     DEVICE_BIG_ENDIAN);
 }
 
-uint32_t glue(address_space_ldub, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint32_t glue(address_space_ldub, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     uint8_t *ptr;
@@ -181,7 +181,7 @@ uint32_t glue(address_space_ldub, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
 }
 
 /* warning: addr must be aligned */
-static inline uint32_t glue(address_space_lduw_internal, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+static inline uint32_t glue(address_space_lduw_internal, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result,
     enum device_endian endian)
 {
@@ -224,21 +224,21 @@ static inline uint32_t glue(address_space_lduw_internal, SUFFIX)(struct uc_struc
     return val;
 }
 
-uint32_t glue(address_space_lduw, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint32_t glue(address_space_lduw, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_lduw_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
                                                      DEVICE_NATIVE_ENDIAN);
 }
 
-uint32_t glue(address_space_lduw_le, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint32_t glue(address_space_lduw_le, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_lduw_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
                                                      DEVICE_LITTLE_ENDIAN);
 }
 
-uint32_t glue(address_space_lduw_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+uint32_t glue(address_space_lduw_be, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, MemTxAttrs attrs, MemTxResult *result)
 {
     return glue(address_space_lduw_internal, SUFFIX)(uc, ARG1, addr, attrs, result,
@@ -248,7 +248,7 @@ uint32_t glue(address_space_lduw_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
 /* warning: addr must be aligned. The ram page is not masked as dirty
    and the code inside is not invalidated. It is useful if the dirty
    bits are used to track modified PTEs */
-void glue(address_space_stl_notdirty, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stl_notdirty, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     uint8_t *ptr;
@@ -277,7 +277,7 @@ void glue(address_space_stl_notdirty, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
 }
 
 /* warning: addr must be aligned */
-static inline void glue(address_space_stl_internal, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+static inline void glue(address_space_stl_internal, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs,
     MemTxResult *result, enum device_endian endian)
 {
@@ -317,28 +317,28 @@ static inline void glue(address_space_stl_internal, SUFFIX)(struct uc_struct *uc
     //RCU_READ_UNLOCK();
 }
 
-void glue(address_space_stl, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stl, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stl_internal, SUFFIX)(uc, ARG1, addr, val, attrs,
                                              result, DEVICE_NATIVE_ENDIAN);
 }
 
-void glue(address_space_stl_le, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stl_le, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stl_internal, SUFFIX)(uc, ARG1, addr, val, attrs,
                                              result, DEVICE_LITTLE_ENDIAN);
 }
 
-void glue(address_space_stl_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stl_be, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stl_internal, SUFFIX)(uc, ARG1, addr, val, attrs,
                                              result, DEVICE_BIG_ENDIAN);
 }
 
-void glue(address_space_stb, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stb, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     uint8_t *ptr;
@@ -367,7 +367,7 @@ void glue(address_space_stb, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
 }
 
 /* warning: addr must be aligned */
-static inline void glue(address_space_stw_internal, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+static inline void glue(address_space_stw_internal, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs,
     MemTxResult *result, enum device_endian endian)
 {
@@ -407,28 +407,28 @@ static inline void glue(address_space_stw_internal, SUFFIX)(struct uc_struct *uc
     //RCU_READ_UNLOCK();
 }
 
-void glue(address_space_stw, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stw, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stw_internal, SUFFIX)(uc, ARG1, addr, val, attrs, result,
                                              DEVICE_NATIVE_ENDIAN);
 }
 
-void glue(address_space_stw_le, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stw_le, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stw_internal, SUFFIX)(uc, ARG1, addr, val, attrs, result,
                                              DEVICE_LITTLE_ENDIAN);
 }
 
-void glue(address_space_stw_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stw_be, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint32_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stw_internal, SUFFIX)(uc, ARG1, addr, val, attrs, result,
                                DEVICE_BIG_ENDIAN);
 }
 
-static void glue(address_space_stq_internal, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+static void glue(address_space_stq_internal, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint64_t val, MemTxAttrs attrs,
     MemTxResult *result, enum device_endian endian)
 {
@@ -468,21 +468,21 @@ static void glue(address_space_stq_internal, SUFFIX)(struct uc_struct *uc, ARG1_
     //RCU_READ_UNLOCK();
 }
 
-void glue(address_space_stq, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stq, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint64_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stq_internal, SUFFIX)(uc, ARG1, addr, val, attrs, result,
                                              DEVICE_NATIVE_ENDIAN);
 }
 
-void glue(address_space_stq_le, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stq_le, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint64_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stq_internal, SUFFIX)(uc, ARG1, addr, val, attrs, result,
                                              DEVICE_LITTLE_ENDIAN);
 }
 
-void glue(address_space_stq_be, SUFFIX)(struct uc_struct *uc, ARG1_DECL,
+void glue(address_space_stq_be, SUFFIX)(struct qc_struct *uc, ARG1_DECL,
     hwaddr addr, uint64_t val, MemTxAttrs attrs, MemTxResult *result)
 {
     glue(address_space_stq_internal, SUFFIX)(uc, ARG1, addr, val, attrs, result,

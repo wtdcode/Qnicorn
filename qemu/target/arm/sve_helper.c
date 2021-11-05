@@ -4160,7 +4160,7 @@ static intptr_t find_next_active(uint64_t *vg, intptr_t reg_off,
  * Return the maximum offset <= @mem_max which is still within the page
  * referenced by @base + @mem_off.
  */
-static intptr_t max_for_page(struct uc_struct *uc, target_ulong base, intptr_t mem_off,
+static intptr_t max_for_page(struct qc_struct *uc, target_ulong base, intptr_t mem_off,
                              intptr_t mem_max)
 {
     target_ulong addr = base + mem_off;
@@ -5049,7 +5049,7 @@ typedef bool sve_ld1_nf_fn(CPUARMState *env, void *vd, intptr_t reg_off,
 static bool sve_ld##NAME##_nf(CPUARMState *env, void *vd, intptr_t reg_off, \
                               target_ulong addr, int mmu_idx)               \
 {                                                                           \
-    struct uc_struct *uc = env->uc;                                         \
+    struct qc_struct *uc = env->uc;                                         \
     target_ulong next_page = 0ULL - (addr | TARGET_PAGE_MASK);                    \
     if (likely(next_page - addr >= sizeof(TYPEM))) {                        \
         void *host = tlb_vaddr_to_host(env, addr, MMU_DATA_LOAD, mmu_idx);  \
@@ -5066,7 +5066,7 @@ static bool sve_ld##NAME##_nf(CPUARMState *env, void *vd, intptr_t reg_off, \
 static bool sve_ld##NAME##_nf(CPUARMState *env, void *vd, intptr_t reg_off, \
                               target_ulong addr, int mmu_idx)               \
 {                                                                           \
-    struct uc_struct *uc = env->uc;                                         \
+    struct qc_struct *uc = env->uc;                                         \
     target_ulong next_page = -(addr | TARGET_PAGE_MASK);                    \
     if (likely(next_page - addr >= sizeof(TYPEM))) {                        \
         void *host = tlb_vaddr_to_host(env, addr, MMU_DATA_LOAD, mmu_idx);  \

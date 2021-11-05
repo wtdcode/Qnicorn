@@ -7,1106 +7,3174 @@
 #ifndef UNICORN_ENGINE_H
 #define UNICORN_ENGINE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include "platform.h"
-#include <stdarg.h>
-
-#if defined(QNICORN_HAS_OSXKERNEL)
-#include <libkern/libkern.h>
-#else
-#include <stdlib.h>
-#include <stdio.h>
-#endif
-
-struct uc_struct;
-typedef struct uc_struct uc_engine;
-
-typedef size_t uc_hook;
-
-#include "m68k.h"
-#include "x86.h"
-#include "arm.h"
-#include "arm64.h"
-#include "mips.h"
-#include "sparc.h"
-#include "ppc.h"
-#include "riscv.h"
-
-#ifdef __GNUC__
-#define DEFAULT_VISIBILITY __attribute__((visibility("default")))
-#else
-#define DEFAULT_VISIBILITY
-#endif
-
-#ifdef _MSC_VER
-#pragma warning(disable : 4201)
-#pragma warning(disable : 4100)
-#ifdef UNICORN_SHARED
-#define UNICORN_EXPORT __declspec(dllexport)
-#else // defined(UNICORN_STATIC)
-#define UNICORN_EXPORT
-#endif
-#else
-#ifdef __GNUC__
-#define UNICORN_EXPORT __attribute__((visibility("default")))
-#else
-#define UNICORN_EXPORT
-#endif
-#endif
-
-#ifdef __GNUC__
-#define UNICORN_DEPRECATED __attribute__((deprecated))
-#elif defined(_MSC_VER)
-#define UNICORN_DEPRECATED __declspec(deprecated)
-#else
-#pragma message(                                                               \
-    "WARNING: You need to implement UNICORN_DEPRECATED for this compiler")
-#define UNICORN_DEPRECATED
-#endif
-
-// Unicorn API version
-#define UC_API_MAJOR 2
-#define UC_API_MINOR 0
-
-// Unicorn package version
-#define UC_VERSION_MAJOR UC_API_MAJOR
-#define UC_VERSION_MINOR UC_API_MINOR
-#define UC_VERSION_EXTRA 0
-
-/*
-  Macro to create combined version which can be compared to
-  result of uc_version() API.
-*/
-#define UC_MAKE_VERSION(major, minor) ((major << 8) + minor)
-
-// Scales to calculate timeout on microsecond unit
-// 1 second = 1000,000 microseconds
-#define UC_SECOND_SCALE 1000000
-// 1 milisecond = 1000 nanoseconds
-#define UC_MILISECOND_SCALE 1000
-
-// Architecture type
-typedef enum uc_arch {
-    UC_ARCH_ARM = 1, // ARM architecture (including Thumb, Thumb-2)
-    UC_ARCH_ARM64,   // ARM-64, also called AArch64
-    UC_ARCH_MIPS,    // Mips architecture
-    UC_ARCH_X86,     // X86 architecture (including x86 & x86-64)
-    UC_ARCH_PPC,     // PowerPC architecture
-    UC_ARCH_SPARC,   // Sparc architecture
-    UC_ARCH_M68K,    // M68K architecture
-    UC_ARCH_RISCV,   // RISCV architecture
-    UC_ARCH_MAX,
-} uc_arch;
-
-// Mode type
-typedef enum uc_mode {
-    UC_MODE_LITTLE_ENDIAN = 0,    // little-endian mode (default mode)
-    UC_MODE_BIG_ENDIAN = 1 << 30, // big-endian mode
-
-    // arm / arm64
-    UC_MODE_ARM = 0,        // ARM mode
-    UC_MODE_THUMB = 1 << 4, // THUMB mode (including Thumb-2)
-    // Depreciated, use UC_ARM_CPU_* with uc_ctl instead.
-    UC_MODE_MCLASS = 1 << 5, // ARM's Cortex-M series.
-    UC_MODE_V8 = 1 << 6, // ARMv8 A32 encodings for ARM (currently unsupported)
-
-    // arm (32bit) cpu types
-    // Depreciated, use UC_ARM_CPU_* with uc_ctl instead.
-    UC_MODE_ARM926 = 1 << 7,  // ARM926 CPU type
-    UC_MODE_ARM946 = 1 << 8,  // ARM946 CPU type
-    UC_MODE_ARM1176 = 1 << 9, // ARM1176 CPU type
-
-    // mips
-    UC_MODE_MICRO = 1 << 4,    // MicroMips mode (currently unsupported)
-    UC_MODE_MIPS3 = 1 << 5,    // Mips III ISA (currently unsupported)
-    UC_MODE_MIPS32R6 = 1 << 6, // Mips32r6 ISA (currently unsupported)
-    UC_MODE_MIPS32 = 1 << 2,   // Mips32 ISA
-    UC_MODE_MIPS64 = 1 << 3,   // Mips64 ISA
-
-    // x86 / x64
-    UC_MODE_16 = 1 << 1, // 16-bit mode
-    UC_MODE_32 = 1 << 2, // 32-bit mode
-    UC_MODE_64 = 1 << 3, // 64-bit mode
-
-    // ppc
-    UC_MODE_PPC32 = 1 << 2, // 32-bit mode
-    UC_MODE_PPC64 = 1 << 3, // 64-bit mode (currently unsupported)
-    UC_MODE_QPX =
-        1 << 4, // Quad Processing eXtensions mode (currently unsupported)
-
-    // sparc
-    UC_MODE_SPARC32 = 1 << 2, // 32-bit mode
-    UC_MODE_SPARC64 = 1 << 3, // 64-bit mode
-    UC_MODE_V9 = 1 << 4,      // SparcV9 mode (currently unsupported)
-
-    // riscv
-    UC_MODE_RISCV32 = 1 << 2, // 32-bit mode
-    UC_MODE_RISCV64 = 1 << 3, // 64-bit mode
-
-    // m68k
-} uc_mode;
-
-// All type of errors encountered by Unicorn API.
-// These are values returned by uc_errno()
-typedef enum uc_err {
-    UC_ERR_OK = 0,         // No error: everything was fine
-    UC_ERR_NOMEM,          // Out-Of-Memory error: uc_open(), uc_emulate()
-    UC_ERR_ARCH,           // Unsupported architecture: uc_open()
-    UC_ERR_HANDLE,         // Invalid handle
-    UC_ERR_MODE,           // Invalid/unsupported mode: uc_open()
-    UC_ERR_VERSION,        // Unsupported version (bindings)
-    UC_ERR_READ_UNMAPPED,  // Quit emulation due to READ on unmapped memory:
-                           // uc_emu_start()
-    UC_ERR_WRITE_UNMAPPED, // Quit emulation due to WRITE on unmapped memory:
-                           // uc_emu_start()
-    UC_ERR_FETCH_UNMAPPED, // Quit emulation due to FETCH on unmapped memory:
-                           // uc_emu_start()
-    UC_ERR_HOOK,           // Invalid hook type: uc_hook_add()
-    UC_ERR_INSN_INVALID,   // Quit emulation due to invalid instruction:
-                           // uc_emu_start()
-    UC_ERR_MAP,            // Invalid memory mapping: uc_mem_map()
-    UC_ERR_WRITE_PROT,     // Quit emulation due to UC_MEM_WRITE_PROT violation:
-                           // uc_emu_start()
-    UC_ERR_READ_PROT,      // Quit emulation due to UC_MEM_READ_PROT violation:
-                           // uc_emu_start()
-    UC_ERR_FETCH_PROT,     // Quit emulation due to UC_MEM_FETCH_PROT violation:
-                           // uc_emu_start()
-    UC_ERR_ARG, // Inavalid argument provided to uc_xxx function (See specific
-                // function API)
-    UC_ERR_READ_UNALIGNED,  // Unaligned read
-    UC_ERR_WRITE_UNALIGNED, // Unaligned write
-    UC_ERR_FETCH_UNALIGNED, // Unaligned fetch
-    UC_ERR_HOOK_EXIST,      // hook for this event already existed
-    UC_ERR_RESOURCE,        // Insufficient resource: uc_emu_start()
-    UC_ERR_EXCEPTION,       // Unhandled CPU exception
-} uc_err;
-
-/*
-  Callback function for tracing code (UC_HOOK_CODE & UC_HOOK_BLOCK)
-
-  @address: address where the code is being executed
-  @size: size of machine instruction(s) being executed, or 0 when size is
-  unknown
-  @user_data: user data passed to tracing APIs.
-*/
-typedef void (*uc_cb_hookcode_t)(uc_engine *uc, uint64_t address, uint32_t size,
-                                 void *user_data);
-
-/*
-  Callback function for tracing interrupts (for uc_hook_intr())
-
-  @intno: interrupt number
-  @user_data: user data passed to tracing APIs.
-*/
-typedef void (*uc_cb_hookintr_t)(uc_engine *uc, uint32_t intno,
-                                 void *user_data);
-
-/*
-  Callback function for tracing invalid instructions
-
-  @user_data: user data passed to tracing APIs.
-
-  @return: return true to continue, or false to stop program (due to invalid
-  instruction).
-*/
-typedef bool (*uc_cb_hookinsn_invalid_t)(uc_engine *uc, void *user_data);
-
-/*
-  Callback function for tracing IN instruction of X86
-
-  @port: port number
-  @size: data size (1/2/4) to be read from this port
-  @user_data: user data passed to tracing APIs.
-*/
-typedef uint32_t (*uc_cb_insn_in_t)(uc_engine *uc, uint32_t port, int size,
-                                    void *user_data);
-
-/*
-  Callback function for OUT instruction of X86
-
-  @port: port number
-  @size: data size (1/2/4) to be written to this port
-  @value: data value to be written to this port
-*/
-typedef void (*uc_cb_insn_out_t)(uc_engine *uc, uint32_t port, int size,
-                                 uint32_t value, void *user_data);
-
-// Represent a TranslationBlock.
-typedef struct uc_tb {
-    uint64_t pc;
-    uint16_t icount;
-    uint16_t size;
-} uc_tb;
-
-/*
-  Callback function for new edges between translation blocks.
-
-  @cur_tb: Current TB which is to be generated.
-  @prev_tb: The previous TB.
-*/
-typedef void (*uc_hook_edge_gen_t)(uc_engine *uc, uc_tb *cur_tb, uc_tb *prev_tb,
-                                   void *user_data);
-
-/*
-  Callback function for tcg opcodes that fits in two arguments.
-
-  @address: Current pc.
-  @arg1: The first argument.
-  @arg2: The second argument.
-*/
-typedef void (*uc_hook_tcg_op_2)(uc_engine *uc, uint64_t address, uint64_t arg1,
-                                 uint64_t arg2, void *user_data);
-
-typedef uc_hook_tcg_op_2 uc_hook_tcg_sub;
-
-/*
-  Callback function for MMIO read
-
-  @offset: offset to the base address of the IO memory.
-  @size: data size to read
-  @user_data: user data passed to uc_mmio_map()
-*/
-typedef uint64_t (*uc_cb_mmio_read_t)(uc_engine *uc, uint64_t offset,
-                                      unsigned size, void *user_data);
-
-/*
-  Callback function for MMIO write
-
-  @offset: offset to the base address of the IO memory.
-  @size: data size to write
-  @value: data value to be written
-  @user_data: user data passed to uc_mmio_map()
-*/
-typedef void (*uc_cb_mmio_write_t)(uc_engine *uc, uint64_t offset,
-                                   unsigned size, uint64_t value,
-                                   void *user_data);
-
-// All type of memory accesses for UC_HOOK_MEM_*
-typedef enum uc_mem_type {
-    UC_MEM_READ = 16,      // Memory is read from
-    UC_MEM_WRITE,          // Memory is written to
-    UC_MEM_FETCH,          // Memory is fetched
-    UC_MEM_READ_UNMAPPED,  // Unmapped memory is read from
-    UC_MEM_WRITE_UNMAPPED, // Unmapped memory is written to
-    UC_MEM_FETCH_UNMAPPED, // Unmapped memory is fetched
-    UC_MEM_WRITE_PROT,     // Write to write protected, but mapped, memory
-    UC_MEM_READ_PROT,      // Read from read protected, but mapped, memory
-    UC_MEM_FETCH_PROT,     // Fetch from non-executable, but mapped, memory
-    UC_MEM_READ_AFTER,     // Memory is read from (successful access)
-} uc_mem_type;
-
-// These are all op codes we support to hook for UC_HOOK_TCG_OP_CODE.
-// Be cautious since it may bring much more overhead than UC_HOOK_CODE without
-// proper flags.
-// TODO: Tracing UC_TCG_OP_CALL should be interesting.
-typedef enum uc_tcg_op_code {
-    UC_TCG_OP_SUB = 0, // Both sub_i32 and sub_i64
-} uc_tcg_op_code;
-
-// These are extra flags to be paired with uc_tcg_op_code which is helpful to
-// instrument in some certain cases.
-typedef enum uc_tcg_op_flag {
-    // Only instrument opcode if it would set cc_dst, i.e. cmp instruction.
-    UC_TCG_OP_FLAG_CMP = 1 << 0,
-    // Only instrument opcode which is directly translated.
-    // i.e. x86 sub/subc -> tcg sub_i32/64
-    UC_TCG_OP_FLAG_DIRECT = 1 << 1
-} uc_tcg_op_flag;
-
-// All type of hooks for uc_hook_add() API.
-typedef enum uc_hook_type {
-    // Hook all interrupt/syscall events
-    UC_HOOK_INTR = 1 << 0,
-    // Hook a particular instruction - only a very small subset of instructions
-    // supported here
-    UC_HOOK_INSN = 1 << 1,
-    // Hook a range of code
-    UC_HOOK_CODE = 1 << 2,
-    // Hook basic blocks
-    UC_HOOK_BLOCK = 1 << 3,
-    // Hook for memory read on unmapped memory
-    UC_HOOK_MEM_READ_UNMAPPED = 1 << 4,
-    // Hook for invalid memory write events
-    UC_HOOK_MEM_WRITE_UNMAPPED = 1 << 5,
-    // Hook for invalid memory fetch for execution events
-    UC_HOOK_MEM_FETCH_UNMAPPED = 1 << 6,
-    // Hook for memory read on read-protected memory
-    UC_HOOK_MEM_READ_PROT = 1 << 7,
-    // Hook for memory write on write-protected memory
-    UC_HOOK_MEM_WRITE_PROT = 1 << 8,
-    // Hook for memory fetch on non-executable memory
-    UC_HOOK_MEM_FETCH_PROT = 1 << 9,
-    // Hook memory read events.
-    UC_HOOK_MEM_READ = 1 << 10,
-    // Hook memory write events.
-    UC_HOOK_MEM_WRITE = 1 << 11,
-    // Hook memory fetch for execution events
-    UC_HOOK_MEM_FETCH = 1 << 12,
-    // Hook memory read events, but only successful access.
-    // The callback will be triggered after successful read.
-    UC_HOOK_MEM_READ_AFTER = 1 << 13,
-    // Hook invalid instructions exceptions.
-    UC_HOOK_INSN_INVALID = 1 << 14,
-    // Hook on new edge generation. Could be useful in program analysis.
-    //
-    // NOTE: This is different from UC_HOOK_BLOCK in 2 ways:
-    //       1. The hook is called before executing code.
-    //       2. The hook is only called when generation is triggered.
-    UC_HOOK_EDGE_GENERATED = 1 << 15,
-    // Hook on specific tcg op code. The usage of this hook is similar to
-    // UC_HOOK_INSN.
-    UC_HOOK_TCG_OPCODE = 1 << 16,
-} uc_hook_type;
-
-// Hook type for all events of unmapped memory access
-#define UC_HOOK_MEM_UNMAPPED                                                   \
-    (UC_HOOK_MEM_READ_UNMAPPED + UC_HOOK_MEM_WRITE_UNMAPPED +                  \
-     UC_HOOK_MEM_FETCH_UNMAPPED)
-// Hook type for all events of illegal protected memory access
-#define UC_HOOK_MEM_PROT                                                       \
-    (UC_HOOK_MEM_READ_PROT + UC_HOOK_MEM_WRITE_PROT + UC_HOOK_MEM_FETCH_PROT)
-// Hook type for all events of illegal read memory access
-#define UC_HOOK_MEM_READ_INVALID                                               \
-    (UC_HOOK_MEM_READ_PROT + UC_HOOK_MEM_READ_UNMAPPED)
-// Hook type for all events of illegal write memory access
-#define UC_HOOK_MEM_WRITE_INVALID                                              \
-    (UC_HOOK_MEM_WRITE_PROT + UC_HOOK_MEM_WRITE_UNMAPPED)
-// Hook type for all events of illegal fetch memory access
-#define UC_HOOK_MEM_FETCH_INVALID                                              \
-    (UC_HOOK_MEM_FETCH_PROT + UC_HOOK_MEM_FETCH_UNMAPPED)
-// Hook type for all events of illegal memory access
-#define UC_HOOK_MEM_INVALID (UC_HOOK_MEM_UNMAPPED + UC_HOOK_MEM_PROT)
-// Hook type for all events of valid memory access
-// NOTE: UC_HOOK_MEM_READ is triggered before UC_HOOK_MEM_READ_PROT and
-// UC_HOOK_MEM_READ_UNMAPPED, so
-//       this hook may technically trigger on some invalid reads.
-#define UC_HOOK_MEM_VALID                                                      \
-    (UC_HOOK_MEM_READ + UC_HOOK_MEM_WRITE + UC_HOOK_MEM_FETCH)
-
-/*
-  Callback function for hooking memory (READ, WRITE & FETCH)
-
-  @type: this memory is being READ, or WRITE
-  @address: address where the code is being executed
-  @size: size of data being read or written
-  @value: value of data being written to memory, or irrelevant if type = READ.
-  @user_data: user data passed to tracing APIs
-*/
-typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
-                                uint64_t address, int size, int64_t value,
-                                void *user_data);
-
-/*
-  Callback function for handling invalid memory access events (UNMAPPED and
-    PROT events)
-
-  @type: this memory is being READ, or WRITE
-  @address: address where the code is being executed
-  @size: size of data being read or written
-  @value: value of data being written to memory, or irrelevant if type = READ.
-  @user_data: user data passed to tracing APIs
-
-  @return: return true to continue, or false to stop program (due to invalid
-  memory). NOTE: returning true to continue execution will only work if the
-  accessed memory is made accessible with the correct permissions during the
-  hook.
-
-           In the event of a UC_MEM_READ_UNMAPPED or UC_MEM_WRITE_UNMAPPED
-  callback, the memory should be uc_mem_map()-ed with the correct permissions,
-  and the instruction will then read or write to the address as it was supposed
-  to.
-
-           In the event of a UC_MEM_FETCH_UNMAPPED callback, the memory can be
-  mapped in as executable, in which case execution will resume from the fetched
-  address. The instruction pointer may be written to in order to change where
-  execution resumes, but the fetch must succeed if execution is to resume.
-*/
-typedef bool (*uc_cb_eventmem_t)(uc_engine *uc, uc_mem_type type,
-                                 uint64_t address, int size, int64_t value,
-                                 void *user_data);
-
-/*
-  Memory region mapped by uc_mem_map() and uc_mem_map_ptr()
-  Retrieve the list of memory regions with uc_mem_regions()
-*/
-typedef struct uc_mem_region {
-    uint64_t begin; // begin address of the region (inclusive)
-    uint64_t end;   // end address of the region (inclusive)
-    uint32_t perms; // memory permissions of the region
-} uc_mem_region;
-
-// All type of queries for uc_query() API.
-typedef enum uc_query_type {
-    // Dynamically query current hardware mode.
-    UC_QUERY_MODE = 1,
-    UC_QUERY_PAGE_SIZE, // query pagesize of engine
-    UC_QUERY_ARCH, // query architecture of engine (for ARM to query Thumb mode)
-    UC_QUERY_TIMEOUT, // query if emulation stops due to timeout (indicated if
-                      // result = True)
-} uc_query_type;
-
-// The implementation of uc_ctl is like what Linux ioctl does but slightly
-// different.
-//
-// A uc_control_type passed to uc_ctl is constructed as:
-//
-//    R/W       NR       Reserved     Type
-//  [      ] [      ]  [         ] [       ]
-//  31    30 29     26 25       16 15      0
-//
-//  @R/W: Whether the operation is a read or write access.
-//  @NR: Number of arguments.
-//  @Reserved: Should be zero, reserved for future extension.
-//  @Type: Taken from uc_control_type enum.
-//
-// See the helper macros below.
-
-// No input and output arguments.
-#define UC_CTL_IO_NONE (0)
-// Only input arguments for a write operation.
-#define UC_CTL_IO_WRITE (1)
-// Only output arguments for a read operation.
-#define UC_CTL_IO_READ (2)
-// The arguments include both input and output arugments.
-#define UC_CTL_IO_READ_WRITE (UC_CTL_IO_WRITE | UC_CTL_IO_READ)
-
-#define UC_CTL(type, nr, rw) ((type) | ((nr) << 26) | ((rw) << 30))
-#define UC_CTL_NONE(type, nr) UC_CTL(type, nr, UC_CTL_IO_NONE)
-#define UC_CTL_READ(type, nr) UC_CTL(type, nr, UC_CTL_IO_READ)
-#define UC_CTL_WRITE(type, nr) UC_CTL(type, nr, UC_CTL_IO_WRITE)
-#define UC_CTL_READ_WRITE(type, nr) UC_CTL(type, nr, UC_CTL_IO_READ_WRITE)
-
-// All type of controls for uc_ctl API.
-// The controls are organized in a tree level.
-// If a control don't have `Set` or `Get` for @args, it means it's r/o or w/o.
-typedef enum uc_control_type {
-    // Current mode.
-    // Read: @args = (int*)
-    UC_CTL_UC_MODE = 0,
-    // Curent page size.
-    // Write: @args = (uint32_t)
-    // Read: @args = (uint32_t*)
-    UC_CTL_UC_PAGE_SIZE,
-    // Current arch.
-    // Read: @args = (int*)
-    UC_CTL_UC_ARCH,
-    // Current timeout.
-    // Read: @args = (uint64_t*)
-    UC_CTL_UC_TIMEOUT,
-    // Enable multiple exits.
-    // Without this control, reading/setting exits won't work.
-    // This is for API backward compatibility.
-    // Write: @args = (int)
-    UC_CTL_UC_USE_EXITS,
-    // The number of current exits.
-    // Read: @args = (size_t*)
-    UC_CTL_UC_EXITS_CNT,
-    // Current exits.
-    // Write: @args = (uint64_t* exits, size_t len)
-    //        @len = UC_CTL_UC_EXITS_CNT
-    // Read: @args = (uint64_t* exits, size_t len)
-    //       @len = UC_CTL_UC_EXITS_CNT
-    UC_CTL_UC_EXITS,
-
-    // Set the cpu model of uc.
-    // Note this option can only be set before any Unicorn
-    // API is called except for uc_open.
-    // Write: @args = (int)
-    // Read:  @args = (int*)
-    UC_CTL_CPU_MODEL,
-    // Request a tb cache at a specific address
-    // Read: @args = (uint64_t, uc_tb*)
-    UC_CTL_TB_REQUEST_CACHE,
-    // Invalidate a tb cache at a specific address
-    // Write: @args = (uint64_t)
-    UC_CTL_TB_REMOVE_CACHE
-
-} uc_control_type;
-
-#define uc_ctl_get_mode(uc, mode)                                              \
-    uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_MODE, 1), (mode))
-#define uc_ctl_get_page_size(uc, ptr)                                          \
-    uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_PAGE_SIZE, 1), (ptr))
-#define uc_ctl_set_page_size(uc, page_size)                                    \
-    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_UC_PAGE_SIZE, 1), (page_size))
-#define uc_ctl_get_arch(uc, arch)                                              \
-    uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_ARCH, 1), (arch))
-#define uc_ctl_get_timeout(uc, ptr)                                            \
-    uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_TIMEOUT, 1), (ptr))
-#define uc_ctl_exits_enabled(uc, enabled)                                      \
-    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_UC_USE_EXITS, 1), (enabled))
-#define uc_ctl_get_exits_cnt(uc, ptr)                                          \
-    uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_EXITS_CNT, 1), (ptr))
-#define uc_ctl_get_exits(uc, buffer, len)                                      \
-    uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_EXITS, 2), (buffer), (len))
-#define uc_ctl_set_exits(uc, buffer, len)                                      \
-    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_UC_EXITS, 2), (buffer), (len))
-#define uc_ctl_get_cpu_model(uc, model)                                        \
-    uc_ctl(uc, UC_CTL_READ(UC_CTL_CPU_MODEL, 1), (model))
-#define uc_ctl_set_cpu_model(uc, model)                                        \
-    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_CPU_MODEL, 1), (model))
-#define uc_ctl_remove_cache(uc, address)                                       \
-    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_TB_REMOVE_CACHE, 1), (address))
-#define uc_ctl_request_cache(uc, address, tb)                                  \
-    uc_ctl(uc, UC_CTL_READ_WRITE(UC_CTL_TB_REQUEST_CACHE, 2), (address), (tb))
-
-// Opaque storage for CPU context, used with uc_context_*()
-struct uc_context;
-typedef struct uc_context uc_context;
-
-/*
- Return combined API version & major and minor version numbers.
-
- @major: major number of API version
- @minor: minor number of API version
-
- @return hexical number as (major << 8 | minor), which encodes both
-     major & minor versions.
-     NOTE: This returned value can be compared with version number made
-     with macro UC_MAKE_VERSION
-
- For example, second API version would return 1 in @major, and 1 in @minor
- The return value would be 0x0101
-
- NOTE: if you only care about returned value, but not major and minor values,
- set both @major & @minor arguments to NULL.
-*/
-UNICORN_EXPORT
-unsigned int uc_version(unsigned int *major, unsigned int *minor);
-
-/*
- Determine if the given architecture is supported by this library.
-
- @arch: architecture type (UC_ARCH_*)
-
- @return True if this library supports the given arch.
-*/
-UNICORN_EXPORT
-bool uc_arch_supported(uc_arch arch);
-
-/*
- Create new instance of unicorn engine.
-
- @arch: architecture type (UC_ARCH_*)
- @mode: hardware mode. This is combined of UC_MODE_*
- @uc: pointer to uc_engine, which will be updated at return time
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **uc);
-
-/*
- Close a Unicorn engine instance.
- NOTE: this must be called only when there is no longer any
- usage of @uc. This API releases some of @uc's cached memory, thus
- any use of the Unicorn API with @uc after it has been closed may
- crash your application. After this, @uc is invalid, and is no
- longer usable.
-
- @uc: pointer to a handle returned by uc_open()
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_close(uc_engine *uc);
-
-/*
- Query internal status of engine.
-
- @uc: handle returned by uc_open()
- @type: query type. See uc_query_type
-
- @result: save the internal status queried
-
- @return: error code of uc_err enum type (UC_ERR_*, see above)
-*/
-UNICORN_EXPORT
-uc_err uc_query(uc_engine *uc, uc_query_type type, size_t *result);
-
-/*
- Control internal states of engine.
-
- Also see uc_ctl_* macro helpers for easy use.
-
- @uc: handle returned by uc_open()
- @control: the control type.
- @args: See uc_control_type for details about variadic arguments.
-
- @return: error code of uc_err enum type (UC_ERR_*, see above)
-*/
-UNICORN_EXPORT
-uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...);
-
-/*
- Report the last error number when some API function fails.
- Like glibc's errno, uc_errno might not retain its old value once accessed.
-
- @uc: handle returned by uc_open()
-
- @return: error code of uc_err enum type (UC_ERR_*, see above)
-*/
-UNICORN_EXPORT
-uc_err uc_errno(uc_engine *uc);
-
-/*
- Return a string describing given error code.
-
- @code: error code (see UC_ERR_* above)
-
- @return: returns a pointer to a string that describes the error code
-   passed in the argument @code
- */
-UNICORN_EXPORT
-const char *uc_strerror(uc_err code);
-
-/*
- Write to register.
-
- @uc: handle returned by uc_open()
- @regid:  register ID that is to be modified.
- @value:  pointer to the value that will set to register @regid
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_reg_write(uc_engine *uc, int regid, const void *value);
-
-/*
- Read register value.
-
- @uc: handle returned by uc_open()
- @regid:  register ID that is to be retrieved.
- @value:  pointer to a variable storing the register value.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_reg_read(uc_engine *uc, int regid, void *value);
-
-/*
- Write multiple register values.
-
- @uc: handle returned by uc_open()
- @rges:  array of register IDs to store
- @value: pointer to array of register values
- @count: length of both *regs and *vals
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_reg_write_batch(uc_engine *uc, int *regs, void *const *vals,
-                          int count);
-
-/*
- Read multiple register values.
-
- @uc: handle returned by uc_open()
- @rges:  array of register IDs to retrieve
- @value: pointer to array of values to hold registers
- @count: length of both *regs and *vals
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_reg_read_batch(uc_engine *uc, int *regs, void **vals, int count);
-
-/*
- Write to a range of bytes in memory.
-
- @uc: handle returned by uc_open()
- @address: starting memory address of bytes to set.
- @bytes:   pointer to a variable containing data to be written to memory.
- @size:   size of memory to write to.
-
- NOTE: @bytes must be big enough to contain @size bytes.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_mem_write(uc_engine *uc, uint64_t address, const void *bytes,
-                    size_t size);
-
-/*
- Read a range of bytes in memory.
-
- @uc: handle returned by uc_open()
- @address: starting memory address of bytes to get.
- @bytes:   pointer to a variable containing data copied from memory.
- @size:   size of memory to read.
-
- NOTE: @bytes must be big enough to contain @size bytes.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_mem_read(uc_engine *uc, uint64_t address, void *bytes, size_t size);
-
-/*
- Emulate machine code in a specific duration of time.
-
- @uc: handle returned by uc_open()
- @begin: address where emulation starts
- @until: address where emulation stops (i.e. when this address is hit)
- @timeout: duration to emulate the code (in microseconds). When this value is 0,
-        we will emulate the code in infinite time, until the code is finished.
- @count: the number of instructions to be emulated. When this value is 0,
-        we will emulate all the code available, until the code is finished.
-
- NOTE: The internal states of the engine is guranteed to be correct if and only
-       if uc_emu_start returns without any errors or errors have been handled in
-       the callbacks.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
-                    uint64_t timeout, size_t count);
-
-/*
- Stop emulation (which was started by uc_emu_start() API.
- This is typically called from callback functions registered via tracing APIs.
-
- @uc: handle returned by uc_open()
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_emu_stop(uc_engine *uc);
-
-/*
- Register callback for a hook event.
- The callback will be run when the hook event is hit.
-
- @uc: handle returned by uc_open()
- @hh: hook handle returned from this registration. To be used in uc_hook_del()
- API
- @type: hook type, refer to uc_hook_type enum
- @callback: callback to be run when instruction is hit
- @user_data: user-defined data. This will be passed to callback function in its
-      last argument @user_data
- @begin: start address of the area where the callback is in effect (inclusive)
- @end: end address of the area where the callback is in effect (inclusive)
-   NOTE 1: the callback is called only if related address is in range [@begin,
- @end] NOTE 2: if @begin > @end, callback is called whenever this hook type is
- triggered
- @...: variable arguments (depending on @type)
-   NOTE: if @type = UC_HOOK_INSN, this is the instruction ID.
-         currently, only x86 in, out, syscall, sysenter, cpuid are supported.
-   NOTE: if @type = UC_HOOK_TCG_OPCODE, arguments are @opcode and @flags. See
- @uc_tcg_op_code and @uc_tcg_op_flag for details.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
-                   void *user_data, uint64_t begin, uint64_t end, ...);
-
-/*
- Unregister (remove) a hook callback.
- This API removes the hook callback registered by uc_hook_add().
- NOTE: this should be called only when you no longer want to trace.
- After this, @hh is invalid, and no longer usable.
-
- @uc: handle returned by uc_open()
- @hh: handle returned by uc_hook_add()
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_hook_del(uc_engine *uc, uc_hook hh);
-
-typedef enum uc_prot {
-    UC_PROT_NONE = 0,
-    UC_PROT_READ = 1,
-    UC_PROT_WRITE = 2,
-    UC_PROT_EXEC = 4,
-    UC_PROT_ALL = 7,
-} uc_prot;
-
-/*
- Map memory in for emulation.
- This API adds a memory region that can be used by emulation.
-
- @uc: handle returned by uc_open()
- @address: starting address of the new memory region to be mapped in.
-    This address must be aligned to 4KB, or this will return with UC_ERR_ARG
- error.
- @size: size of the new memory region to be mapped in.
-    This size must be a multiple of 4KB, or this will return with UC_ERR_ARG
- error.
- @perms: Permissions for the newly mapped region.
-    This must be some combination of UC_PROT_READ | UC_PROT_WRITE |
- UC_PROT_EXEC, or this will return with UC_ERR_ARG error.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_mem_map(uc_engine *uc, uint64_t address, size_t size, uint32_t perms);
-
-/*
- Map existing host memory in for emulation.
- This API adds a memory region that can be used by emulation.
-
- @uc: handle returned by uc_open()
- @address: starting address of the new memory region to be mapped in.
-    This address must be aligned to 4KB, or this will return with UC_ERR_ARG
- error.
- @size: size of the new memory region to be mapped in.
-    This size must be a multiple of 4KB, or this will return with UC_ERR_ARG
- error.
- @perms: Permissions for the newly mapped region.
-    This must be some combination of UC_PROT_READ | UC_PROT_WRITE |
- UC_PROT_EXEC, or this will return with UC_ERR_ARG error.
- @ptr: pointer to host memory backing the newly mapped memory. This host memory
- is expected to be an equal or larger size than provided, and be mapped with at
-    least PROT_READ | PROT_WRITE. If it is not, the resulting behavior is
- undefined.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_mem_map_ptr(uc_engine *uc, uint64_t address, size_t size,
-                      uint32_t perms, void *ptr);
-
-/*
- Map MMIO in for emulation.
- This API adds a MMIO region that can be used by emulation.
-
- @uc: handle returned by uc_open()
- @address: starting address of the new MMIO region to be mapped in.
-   This address must be aligned to 4KB, or this will return with UC_ERR_ARG
- error.
- @size: size of the new MMIO region to be mapped in.
-   This size must be multiple of 4KB, or this will return with UC_ERR_ARG error.
- @read_cb: function for handling reads from this MMIO region.
- @user_data_read: user-defined data. This will be passed to @read_cb function in
- its last argument @user_data
- @write_cb: function for handling writes to this MMIO region.
- @user_data_write: user-defined data. This will be passed to @write_cb function
- in its last argument @user_data
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
- */
-UNICORN_EXPORT
-uc_err uc_mmio_map(uc_engine *uc, uint64_t address, size_t size,
-                   uc_cb_mmio_read_t read_cb, void *user_data_read,
-                   uc_cb_mmio_write_t write_cb, void *user_data_write);
-
-/*
- Unmap a region of emulation memory.
- This API deletes a memory mapping from the emulation memory space.
-
- @uc: handle returned by uc_open()
- @address: starting address of the memory region to be unmapped.
-    This address must be aligned to 4KB, or this will return with UC_ERR_ARG
- error.
- @size: size of the memory region to be modified.
-    This size must be a multiple of 4KB, or this will return with UC_ERR_ARG
- error.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_mem_unmap(uc_engine *uc, uint64_t address, size_t size);
-
-/*
- Set memory permissions for emulation memory.
- This API changes permissions on an existing memory region.
-
- @uc: handle returned by uc_open()
- @address: starting address of the memory region to be modified.
-    This address must be aligned to 4KB, or this will return with UC_ERR_ARG
- error.
- @size: size of the memory region to be modified.
-    This size must be a multiple of 4KB, or this will return with UC_ERR_ARG
- error.
- @perms: New permissions for the mapped region.
-    This must be some combination of UC_PROT_READ | UC_PROT_WRITE |
- UC_PROT_EXEC, or this will return with UC_ERR_ARG error.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_mem_protect(uc_engine *uc, uint64_t address, size_t size,
-                      uint32_t perms);
-
-/*
- Retrieve all memory regions mapped by uc_mem_map() and uc_mem_map_ptr()
- This API allocates memory for @regions, and user must free this memory later
- by uc_free() to avoid leaking memory.
- NOTE: memory regions may be split by uc_mem_unmap()
-
- @uc: handle returned by uc_open()
- @regions: pointer to an array of uc_mem_region struct. This is allocated by
-   Unicorn, and must be freed by user later with uc_free()
- @count: pointer to number of struct uc_mem_region contained in @regions
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_mem_regions(uc_engine *uc, uc_mem_region **regions, uint32_t *count);
-
-/*
- Allocate a region that can be used with uc_context_{save,restore} to perform
- quick save/rollback of the CPU context, which includes registers and some
- internal metadata. Contexts may not be shared across engine instances with
- differing arches or modes.
-
- @uc: handle returned by uc_open()
- @context: pointer to a uc_context*. This will be updated with the pointer to
-   the new context on successful return of this function.
-   Later, this allocated memory must be freed with uc_context_free().
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_alloc(uc_engine *uc, uc_context **context);
-
-/*
- Free the memory allocated by uc_mem_regions.
- WARNING: After Unicorn 1.0.1rc5, the memory allocated by uc_context_alloc
- should be freed by uc_context_free(). Calling uc_free() may still work, but
- the result is **undefined**.
-
- @mem: memory allocated by uc_mem_regions (returned in *regions).
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_free(void *mem);
-
-/*
- Save a copy of the internal CPU context.
- This API should be used to efficiently make or update a saved copy of the
- internal CPU state.
-
- @uc: handle returned by uc_open()
- @context: handle returned by uc_context_alloc()
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_save(uc_engine *uc, uc_context *context);
-
-/*
- Write value to a register of a context.
-
- @ctx: handle returned by uc_context_alloc()
- @regid:  register ID that is to be modified.
- @value:  pointer to the value that will set to register @regid
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_reg_write(uc_context *ctx, int regid, const void *value);
-
-/*
- Read register value from a context.
-
- @ctx: handle returned by uc_context_alloc()
- @regid:  register ID that is to be retrieved.
- @value:  pointer to a variable storing the register value.
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_reg_read(uc_context *ctx, int regid, void *value);
-
-/*
- Write multiple register values to registers of a context.
-
- @ctx: handle returned by uc_context_alloc()
- @regs:  array of register IDs to store
- @value: pointer to array of register values
- @count: length of both *regs and *vals
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_reg_write_batch(uc_context *ctx, int *regs, void *const *vals,
-                                  int count);
-
-/*
- Read multiple register values from a context.
-
- @ctx: handle returned by uc_context_alloc()
- @regs:  array of register IDs to retrieve
- @value: pointer to array of values to hold registers
- @count: length of both *regs and *vals
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_reg_read_batch(uc_context *ctx, int *regs, void **vals,
-                                 int count);
-
-/*
- Restore the current CPU context from a saved copy.
- This API should be used to roll the CPU context back to a previous
- state saved by uc_context_save().
-
- @uc: handle returned by uc_open()
- @context: handle returned by uc_context_alloc that has been used with
- uc_context_save
-
- @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_restore(uc_engine *uc, uc_context *context);
-
-/*
-  Return the size needed to store the cpu context. Can be used to allocate a
-  buffer to contain the cpu context and directly call uc_context_save.
-
-  @uc: handle returned by uc_open()
-
-  @return the size for needed to store the cpu context as as size_t.
-*/
-UNICORN_EXPORT
-size_t uc_context_size(uc_engine *uc);
-
-/*
-  Free the context allocated by uc_context_alloc().
-
-  @context: handle returned by uc_context_alloc()
-
-  @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
-   for detailed error).
-*/
-UNICORN_EXPORT
-uc_err uc_context_free(uc_context *context);
-
-#ifdef __cplusplus
-}
-#endif
+#define uc_cpu_x86 qc_cpu_x86
+#define uc_x86_mmr qc_x86_mmr
+#define uc_x86_msr qc_x86_msr
+#define uc_cb_insn_syscall_t qc_cb_insn_syscall_t
+#define uc_x86_reg qc_x86_reg
+#define uc_x86_insn qc_x86_insn
+#define uc_cpu_sparc32 qc_cpu_sparc32
+#define uc_cpu_sparc64 qc_cpu_sparc64
+#define uc_sparc_reg qc_sparc_reg
+#define uc_cpu_riscv32 qc_cpu_riscv32
+#define uc_cpu_riscv64 qc_cpu_riscv64
+#define uc_riscv_reg qc_riscv_reg
+#define uc_cpu_ppc qc_cpu_ppc
+#define uc_cpu_ppc64 qc_cpu_ppc64
+#define uc_ppc_reg qc_ppc_reg
+#define uc_cpu_mips32 qc_cpu_mips32
+#define uc_cpu_mips64 qc_cpu_mips64
+#define uc_cpu_m68k qc_cpu_m68k
+#define uc_m68k_reg qc_m68k_reg
+#define uc_cpu_aarch64 qc_cpu_aarch64
+#define uc_arm64_reg qc_arm64_reg
+#define uc_cpu_arm qc_cpu_arm
+#define uc_arm_reg qc_arm_reg
+#define uc_struct qc_struct
+#define uc_engine qc_engine
+#define uc_hook qc_hook
+#define uc_arch qc_arch
+#define uc_cb_hookcode_t qc_cb_hookcode_t
+#define uc_cb_hookintr_t qc_cb_hookintr_t
+#define uc_cb_hookinsn_invalid_t qc_cb_hookinsn_invalid_t
+#define uc_cb_insn_in_t qc_cb_insn_in_t
+#define uc_cb_insn_out_t qc_cb_insn_out_t
+#define uc_tb qc_tb
+#define uc_hook_edge_gen_t qc_hook_edge_gen_t
+#define uc_hook_tcg_op_2 qc_hook_tcg_op_2
+#define uc_hook_tcg_sub qc_hook_tcg_sub
+#define uc_cb_mmio_read_t qc_cb_mmio_read_t
+#define uc_cb_mmio_write_t qc_cb_mmio_write_t
+#define uc_mem_type qc_mem_type
+#define uc_tcg_op_code qc_tcg_op_code
+#define uc_tcg_op_flag qc_tcg_op_flag
+#define uc_hook_type qc_hook_type
+#define uc_cb_hookmem_t qc_cb_hookmem_t
+#define uc_cb_eventmem_t qc_cb_eventmem_t
+#define uc_mem_region qc_mem_region
+#define uc_query_type qc_query_type
+#define uc_control_type qc_control_type
+#define uc_ctl_get_mode qc_ctl_get_mode
+#define uc_ctl_get_page_size qc_ctl_get_page_size
+#define uc_ctl_set_page_size qc_ctl_set_page_size
+#define uc_ctl_get_arch qc_ctl_get_arch
+#define uc_ctl_get_timeout qc_ctl_get_timeout
+#define uc_ctl_exits_enabled qc_ctl_exits_enabled
+#define uc_ctl_get_exits_cnt qc_ctl_get_exits_cnt
+#define uc_ctl_get_exits qc_ctl_get_exits
+#define uc_ctl_set_exits qc_ctl_set_exits
+#define uc_ctl_get_cpu_model qc_ctl_get_cpu_model
+#define uc_ctl_set_cpu_model qc_ctl_set_cpu_model
+#define uc_ctl_remove_cache qc_ctl_remove_cache
+#define uc_ctl_request_cache qc_ctl_request_cache
+#define uc_context qc_context
+#define uc_version qc_version
+#define uc_arch_supported qc_arch_supported
+#define uc_open qc_open
+#define uc_close qc_close
+#define uc_query qc_query
+#define uc_ctl qc_ctl
+#define uc_errno qc_errno
+#define uc_strerror qc_strerror
+#define uc_reg_write qc_reg_write
+#define uc_reg_read qc_reg_read
+#define uc_reg_write_batch qc_reg_write_batch
+#define uc_reg_read_batch qc_reg_read_batch
+#define uc_mem_write qc_mem_write
+#define uc_mem_read qc_mem_read
+#define uc_emu_start qc_emu_start
+#define uc_emu_stop qc_emu_stop
+#define uc_hook_add qc_hook_add
+#define uc_hook_del qc_hook_del
+#define uc_prot qc_prot
+#define uc_mem_map qc_mem_map
+#define uc_mem_map_ptr qc_mem_map_ptr
+#define uc_mmio_map qc_mmio_map
+#define uc_mem_unmap qc_mem_unmap
+#define uc_mem_protect qc_mem_protect
+#define uc_mem_regions qc_mem_regions
+#define uc_context_alloc qc_context_alloc
+#define uc_free qc_free
+#define uc_context_save qc_context_save
+#define uc_context_reg_write qc_context_reg_write
+#define uc_context_reg_read qc_context_reg_read
+#define uc_context_reg_write_batch qc_context_reg_write_batch
+#define uc_context_reg_read_batch qc_context_reg_read_batch
+#define uc_context_restore qc_context_restore
+#define uc_context_size qc_context_size
+#define uc_context_free qc_context_free
+#define uc_err qc_err
+#define uc_mode qc_mode
+#define uc_arch qc_arch
+
+#define UC_MIPS_REG QC_MIPS_REG
+#define UC_CPU_ARM_926 QC_CPU_ARM_926
+#define UC_CPU_ARM_946 QC_CPU_ARM_946
+#define UC_CPU_ARM_1026 QC_CPU_ARM_1026
+#define UC_CPU_ARM_1136_R2 QC_CPU_ARM_1136_R2
+#define UC_CPU_ARM_1136 QC_CPU_ARM_1136
+#define UC_CPU_ARM_1176 QC_CPU_ARM_1176
+#define UC_CPU_ARM_11MPCORE QC_CPU_ARM_11MPCORE
+#define UC_CPU_ARM_CORTEX_M0 QC_CPU_ARM_CORTEX_M0
+#define UC_CPU_ARM_CORTEX_M3 QC_CPU_ARM_CORTEX_M3
+#define UC_CPU_ARM_CORTEX_M4 QC_CPU_ARM_CORTEX_M4
+#define UC_CPU_ARM_CORTEX_M7 QC_CPU_ARM_CORTEX_M7
+#define UC_CPU_ARM_CORTEX_M33 QC_CPU_ARM_CORTEX_M33
+#define UC_CPU_ARM_CORTEX_R5 QC_CPU_ARM_CORTEX_R5
+#define UC_CPU_ARM_CORTEX_R5F QC_CPU_ARM_CORTEX_R5F
+#define UC_CPU_ARM_CORTEX_A7 QC_CPU_ARM_CORTEX_A7
+#define UC_CPU_ARM_CORTEX_A8 QC_CPU_ARM_CORTEX_A8
+#define UC_CPU_ARM_CORTEX_A9 QC_CPU_ARM_CORTEX_A9
+#define UC_CPU_ARM_CORTEX_A15 QC_CPU_ARM_CORTEX_A15
+#define UC_CPU_ARM_TI925T QC_CPU_ARM_TI925T
+#define UC_CPU_ARM_SA1100 QC_CPU_ARM_SA1100
+#define UC_CPU_ARM_SA1110 QC_CPU_ARM_SA1110
+#define UC_CPU_ARM_PXA250 QC_CPU_ARM_PXA250
+#define UC_CPU_ARM_PXA255 QC_CPU_ARM_PXA255
+#define UC_CPU_ARM_PXA260 QC_CPU_ARM_PXA260
+#define UC_CPU_ARM_PXA261 QC_CPU_ARM_PXA261
+#define UC_CPU_ARM_PXA262 QC_CPU_ARM_PXA262
+#define UC_CPU_ARM_PXA270A0 QC_CPU_ARM_PXA270A0
+#define UC_CPU_ARM_PXA270A1 QC_CPU_ARM_PXA270A1
+#define UC_CPU_ARM_PXA270B0 QC_CPU_ARM_PXA270B0
+#define UC_CPU_ARM_PXA270B1 QC_CPU_ARM_PXA270B1
+#define UC_CPU_ARM_PXA270C0 QC_CPU_ARM_PXA270C0
+#define UC_CPU_ARM_PXA270C5 QC_CPU_ARM_PXA270C5
+#define UC_CPU_ARM_MAX QC_CPU_ARM_MAX
+#define UC_ARM_REG_INVALID QC_ARM_REG_INVALID
+#define UC_ARM_REG_APSR QC_ARM_REG_APSR
+#define UC_ARM_REG_APSR_NZCV QC_ARM_REG_APSR_NZCV
+#define UC_ARM_REG_CPSR QC_ARM_REG_CPSR
+#define UC_ARM_REG_FPEXC QC_ARM_REG_FPEXC
+#define UC_ARM_REG_FPINST QC_ARM_REG_FPINST
+#define UC_ARM_REG_FPSCR QC_ARM_REG_FPSCR
+#define UC_ARM_REG_FPSCR_NZCV QC_ARM_REG_FPSCR_NZCV
+#define UC_ARM_REG_FPSID QC_ARM_REG_FPSID
+#define UC_ARM_REG_ITSTATE QC_ARM_REG_ITSTATE
+#define UC_ARM_REG_LR QC_ARM_REG_LR
+#define UC_ARM_REG_PC QC_ARM_REG_PC
+#define UC_ARM_REG_SP QC_ARM_REG_SP
+#define UC_ARM_REG_SPSR QC_ARM_REG_SPSR
+#define UC_ARM_REG_D0 QC_ARM_REG_D0
+#define UC_ARM_REG_D1 QC_ARM_REG_D1
+#define UC_ARM_REG_D2 QC_ARM_REG_D2
+#define UC_ARM_REG_D3 QC_ARM_REG_D3
+#define UC_ARM_REG_D4 QC_ARM_REG_D4
+#define UC_ARM_REG_D5 QC_ARM_REG_D5
+#define UC_ARM_REG_D6 QC_ARM_REG_D6
+#define UC_ARM_REG_D7 QC_ARM_REG_D7
+#define UC_ARM_REG_D8 QC_ARM_REG_D8
+#define UC_ARM_REG_D9 QC_ARM_REG_D9
+#define UC_ARM_REG_D10 QC_ARM_REG_D10
+#define UC_ARM_REG_D11 QC_ARM_REG_D11
+#define UC_ARM_REG_D12 QC_ARM_REG_D12
+#define UC_ARM_REG_D13 QC_ARM_REG_D13
+#define UC_ARM_REG_D14 QC_ARM_REG_D14
+#define UC_ARM_REG_D15 QC_ARM_REG_D15
+#define UC_ARM_REG_D16 QC_ARM_REG_D16
+#define UC_ARM_REG_D17 QC_ARM_REG_D17
+#define UC_ARM_REG_D18 QC_ARM_REG_D18
+#define UC_ARM_REG_D19 QC_ARM_REG_D19
+#define UC_ARM_REG_D20 QC_ARM_REG_D20
+#define UC_ARM_REG_D21 QC_ARM_REG_D21
+#define UC_ARM_REG_D22 QC_ARM_REG_D22
+#define UC_ARM_REG_D23 QC_ARM_REG_D23
+#define UC_ARM_REG_D24 QC_ARM_REG_D24
+#define UC_ARM_REG_D25 QC_ARM_REG_D25
+#define UC_ARM_REG_D26 QC_ARM_REG_D26
+#define UC_ARM_REG_D27 QC_ARM_REG_D27
+#define UC_ARM_REG_D28 QC_ARM_REG_D28
+#define UC_ARM_REG_D29 QC_ARM_REG_D29
+#define UC_ARM_REG_D30 QC_ARM_REG_D30
+#define UC_ARM_REG_D31 QC_ARM_REG_D31
+#define UC_ARM_REG_FPINST2 QC_ARM_REG_FPINST2
+#define UC_ARM_REG_MVFR0 QC_ARM_REG_MVFR0
+#define UC_ARM_REG_MVFR1 QC_ARM_REG_MVFR1
+#define UC_ARM_REG_MVFR2 QC_ARM_REG_MVFR2
+#define UC_ARM_REG_Q0 QC_ARM_REG_Q0
+#define UC_ARM_REG_Q1 QC_ARM_REG_Q1
+#define UC_ARM_REG_Q2 QC_ARM_REG_Q2
+#define UC_ARM_REG_Q3 QC_ARM_REG_Q3
+#define UC_ARM_REG_Q4 QC_ARM_REG_Q4
+#define UC_ARM_REG_Q5 QC_ARM_REG_Q5
+#define UC_ARM_REG_Q6 QC_ARM_REG_Q6
+#define UC_ARM_REG_Q7 QC_ARM_REG_Q7
+#define UC_ARM_REG_Q8 QC_ARM_REG_Q8
+#define UC_ARM_REG_Q9 QC_ARM_REG_Q9
+#define UC_ARM_REG_Q10 QC_ARM_REG_Q10
+#define UC_ARM_REG_Q11 QC_ARM_REG_Q11
+#define UC_ARM_REG_Q12 QC_ARM_REG_Q12
+#define UC_ARM_REG_Q13 QC_ARM_REG_Q13
+#define UC_ARM_REG_Q14 QC_ARM_REG_Q14
+#define UC_ARM_REG_Q15 QC_ARM_REG_Q15
+#define UC_ARM_REG_R0 QC_ARM_REG_R0
+#define UC_ARM_REG_R1 QC_ARM_REG_R1
+#define UC_ARM_REG_R2 QC_ARM_REG_R2
+#define UC_ARM_REG_R3 QC_ARM_REG_R3
+#define UC_ARM_REG_R4 QC_ARM_REG_R4
+#define UC_ARM_REG_R5 QC_ARM_REG_R5
+#define UC_ARM_REG_R6 QC_ARM_REG_R6
+#define UC_ARM_REG_R7 QC_ARM_REG_R7
+#define UC_ARM_REG_R8 QC_ARM_REG_R8
+#define UC_ARM_REG_R9 QC_ARM_REG_R9
+#define UC_ARM_REG_R10 QC_ARM_REG_R10
+#define UC_ARM_REG_R11 QC_ARM_REG_R11
+#define UC_ARM_REG_R12 QC_ARM_REG_R12
+#define UC_ARM_REG_S0 QC_ARM_REG_S0
+#define UC_ARM_REG_S1 QC_ARM_REG_S1
+#define UC_ARM_REG_S2 QC_ARM_REG_S2
+#define UC_ARM_REG_S3 QC_ARM_REG_S3
+#define UC_ARM_REG_S4 QC_ARM_REG_S4
+#define UC_ARM_REG_S5 QC_ARM_REG_S5
+#define UC_ARM_REG_S6 QC_ARM_REG_S6
+#define UC_ARM_REG_S7 QC_ARM_REG_S7
+#define UC_ARM_REG_S8 QC_ARM_REG_S8
+#define UC_ARM_REG_S9 QC_ARM_REG_S9
+#define UC_ARM_REG_S10 QC_ARM_REG_S10
+#define UC_ARM_REG_S11 QC_ARM_REG_S11
+#define UC_ARM_REG_S12 QC_ARM_REG_S12
+#define UC_ARM_REG_S13 QC_ARM_REG_S13
+#define UC_ARM_REG_S14 QC_ARM_REG_S14
+#define UC_ARM_REG_S15 QC_ARM_REG_S15
+#define UC_ARM_REG_S16 QC_ARM_REG_S16
+#define UC_ARM_REG_S17 QC_ARM_REG_S17
+#define UC_ARM_REG_S18 QC_ARM_REG_S18
+#define UC_ARM_REG_S19 QC_ARM_REG_S19
+#define UC_ARM_REG_S20 QC_ARM_REG_S20
+#define UC_ARM_REG_S21 QC_ARM_REG_S21
+#define UC_ARM_REG_S22 QC_ARM_REG_S22
+#define UC_ARM_REG_S23 QC_ARM_REG_S23
+#define UC_ARM_REG_S24 QC_ARM_REG_S24
+#define UC_ARM_REG_S25 QC_ARM_REG_S25
+#define UC_ARM_REG_S26 QC_ARM_REG_S26
+#define UC_ARM_REG_S27 QC_ARM_REG_S27
+#define UC_ARM_REG_S28 QC_ARM_REG_S28
+#define UC_ARM_REG_S29 QC_ARM_REG_S29
+#define UC_ARM_REG_S30 QC_ARM_REG_S30
+#define UC_ARM_REG_S31 QC_ARM_REG_S31
+#define UC_ARM_REG_C1_C0_2 QC_ARM_REG_C1_C0_2
+#define UC_ARM_REG_C13_C0_2 QC_ARM_REG_C13_C0_2
+#define UC_ARM_REG_C13_C0_3 QC_ARM_REG_C13_C0_3
+#define UC_ARM_REG_IPSR QC_ARM_REG_IPSR
+#define UC_ARM_REG_MSP QC_ARM_REG_MSP
+#define UC_ARM_REG_PSP QC_ARM_REG_PSP
+#define UC_ARM_REG_CONTROL QC_ARM_REG_CONTROL
+#define UC_ARM_REG_IAPSR QC_ARM_REG_IAPSR
+#define UC_ARM_REG_EAPSR QC_ARM_REG_EAPSR
+#define UC_ARM_REG_XPSR QC_ARM_REG_XPSR
+#define UC_ARM_REG_EPSR QC_ARM_REG_EPSR
+#define UC_ARM_REG_IEPSR QC_ARM_REG_IEPSR
+#define UC_ARM_REG_PRIMASK QC_ARM_REG_PRIMASK
+#define UC_ARM_REG_BASEPRI QC_ARM_REG_BASEPRI
+#define UC_ARM_REG_BASEPRI_MAX QC_ARM_REG_BASEPRI_MAX
+#define UC_ARM_REG_FAULTMASK QC_ARM_REG_FAULTMASK
+#define UC_ARM_REG_APSR_NZCVQ QC_ARM_REG_APSR_NZCVQ
+#define UC_ARM_REG_APSR_G QC_ARM_REG_APSR_G
+#define UC_ARM_REG_APSR_NZCVQG QC_ARM_REG_APSR_NZCVQG
+#define UC_ARM_REG_IAPSR_NZCVQ QC_ARM_REG_IAPSR_NZCVQ
+#define UC_ARM_REG_IAPSR_G QC_ARM_REG_IAPSR_G
+#define UC_ARM_REG_IAPSR_NZCVQG QC_ARM_REG_IAPSR_NZCVQG
+#define UC_ARM_REG_EAPSR_NZCVQ QC_ARM_REG_EAPSR_NZCVQ
+#define UC_ARM_REG_EAPSR_G QC_ARM_REG_EAPSR_G
+#define UC_ARM_REG_EAPSR_NZCVQG QC_ARM_REG_EAPSR_NZCVQG
+#define UC_ARM_REG_XPSR_NZCVQ QC_ARM_REG_XPSR_NZCVQ
+#define UC_ARM_REG_XPSR_G QC_ARM_REG_XPSR_G
+#define UC_ARM_REG_XPSR_NZCVQG QC_ARM_REG_XPSR_NZCVQG
+#define UC_ARM_REG_ENDING QC_ARM_REG_ENDING
+#define UC_ARM_REG_R13 QC_ARM_REG_R13
+#define UC_ARM_REG_R14 QC_ARM_REG_R14
+#define UC_ARM_REG_R15 QC_ARM_REG_R15
+#define UC_ARM_REG_SB QC_ARM_REG_SB
+#define UC_ARM_REG_SL QC_ARM_REG_SL
+#define UC_ARM_REG_FP QC_ARM_REG_FP
+#define UC_ARM_REG_IP QC_ARM_REG_IP
+#define UC_CPU_AARCH64_A57 QC_CPU_AARCH64_A57
+#define UC_CPU_AARCH64_A53 QC_CPU_AARCH64_A53
+#define UC_CPU_AARCH64_A72 QC_CPU_AARCH64_A72
+#define UC_CPU_AARCH64_MAX QC_CPU_AARCH64_MAX
+#define UC_ARM64_REG_INVALID QC_ARM64_REG_INVALID
+#define UC_ARM64_REG_X29 QC_ARM64_REG_X29
+#define UC_ARM64_REG_X30 QC_ARM64_REG_X30
+#define UC_ARM64_REG_NZCV QC_ARM64_REG_NZCV
+#define UC_ARM64_REG_SP QC_ARM64_REG_SP
+#define UC_ARM64_REG_WSP QC_ARM64_REG_WSP
+#define UC_ARM64_REG_WZR QC_ARM64_REG_WZR
+#define UC_ARM64_REG_XZR QC_ARM64_REG_XZR
+#define UC_ARM64_REG_B0 QC_ARM64_REG_B0
+#define UC_ARM64_REG_B1 QC_ARM64_REG_B1
+#define UC_ARM64_REG_B2 QC_ARM64_REG_B2
+#define UC_ARM64_REG_B3 QC_ARM64_REG_B3
+#define UC_ARM64_REG_B4 QC_ARM64_REG_B4
+#define UC_ARM64_REG_B5 QC_ARM64_REG_B5
+#define UC_ARM64_REG_B6 QC_ARM64_REG_B6
+#define UC_ARM64_REG_B7 QC_ARM64_REG_B7
+#define UC_ARM64_REG_B8 QC_ARM64_REG_B8
+#define UC_ARM64_REG_B9 QC_ARM64_REG_B9
+#define UC_ARM64_REG_B10 QC_ARM64_REG_B10
+#define UC_ARM64_REG_B11 QC_ARM64_REG_B11
+#define UC_ARM64_REG_B12 QC_ARM64_REG_B12
+#define UC_ARM64_REG_B13 QC_ARM64_REG_B13
+#define UC_ARM64_REG_B14 QC_ARM64_REG_B14
+#define UC_ARM64_REG_B15 QC_ARM64_REG_B15
+#define UC_ARM64_REG_B16 QC_ARM64_REG_B16
+#define UC_ARM64_REG_B17 QC_ARM64_REG_B17
+#define UC_ARM64_REG_B18 QC_ARM64_REG_B18
+#define UC_ARM64_REG_B19 QC_ARM64_REG_B19
+#define UC_ARM64_REG_B20 QC_ARM64_REG_B20
+#define UC_ARM64_REG_B21 QC_ARM64_REG_B21
+#define UC_ARM64_REG_B22 QC_ARM64_REG_B22
+#define UC_ARM64_REG_B23 QC_ARM64_REG_B23
+#define UC_ARM64_REG_B24 QC_ARM64_REG_B24
+#define UC_ARM64_REG_B25 QC_ARM64_REG_B25
+#define UC_ARM64_REG_B26 QC_ARM64_REG_B26
+#define UC_ARM64_REG_B27 QC_ARM64_REG_B27
+#define UC_ARM64_REG_B28 QC_ARM64_REG_B28
+#define UC_ARM64_REG_B29 QC_ARM64_REG_B29
+#define UC_ARM64_REG_B30 QC_ARM64_REG_B30
+#define UC_ARM64_REG_B31 QC_ARM64_REG_B31
+#define UC_ARM64_REG_D0 QC_ARM64_REG_D0
+#define UC_ARM64_REG_D1 QC_ARM64_REG_D1
+#define UC_ARM64_REG_D2 QC_ARM64_REG_D2
+#define UC_ARM64_REG_D3 QC_ARM64_REG_D3
+#define UC_ARM64_REG_D4 QC_ARM64_REG_D4
+#define UC_ARM64_REG_D5 QC_ARM64_REG_D5
+#define UC_ARM64_REG_D6 QC_ARM64_REG_D6
+#define UC_ARM64_REG_D7 QC_ARM64_REG_D7
+#define UC_ARM64_REG_D8 QC_ARM64_REG_D8
+#define UC_ARM64_REG_D9 QC_ARM64_REG_D9
+#define UC_ARM64_REG_D10 QC_ARM64_REG_D10
+#define UC_ARM64_REG_D11 QC_ARM64_REG_D11
+#define UC_ARM64_REG_D12 QC_ARM64_REG_D12
+#define UC_ARM64_REG_D13 QC_ARM64_REG_D13
+#define UC_ARM64_REG_D14 QC_ARM64_REG_D14
+#define UC_ARM64_REG_D15 QC_ARM64_REG_D15
+#define UC_ARM64_REG_D16 QC_ARM64_REG_D16
+#define UC_ARM64_REG_D17 QC_ARM64_REG_D17
+#define UC_ARM64_REG_D18 QC_ARM64_REG_D18
+#define UC_ARM64_REG_D19 QC_ARM64_REG_D19
+#define UC_ARM64_REG_D20 QC_ARM64_REG_D20
+#define UC_ARM64_REG_D21 QC_ARM64_REG_D21
+#define UC_ARM64_REG_D22 QC_ARM64_REG_D22
+#define UC_ARM64_REG_D23 QC_ARM64_REG_D23
+#define UC_ARM64_REG_D24 QC_ARM64_REG_D24
+#define UC_ARM64_REG_D25 QC_ARM64_REG_D25
+#define UC_ARM64_REG_D26 QC_ARM64_REG_D26
+#define UC_ARM64_REG_D27 QC_ARM64_REG_D27
+#define UC_ARM64_REG_D28 QC_ARM64_REG_D28
+#define UC_ARM64_REG_D29 QC_ARM64_REG_D29
+#define UC_ARM64_REG_D30 QC_ARM64_REG_D30
+#define UC_ARM64_REG_D31 QC_ARM64_REG_D31
+#define UC_ARM64_REG_H0 QC_ARM64_REG_H0
+#define UC_ARM64_REG_H1 QC_ARM64_REG_H1
+#define UC_ARM64_REG_H2 QC_ARM64_REG_H2
+#define UC_ARM64_REG_H3 QC_ARM64_REG_H3
+#define UC_ARM64_REG_H4 QC_ARM64_REG_H4
+#define UC_ARM64_REG_H5 QC_ARM64_REG_H5
+#define UC_ARM64_REG_H6 QC_ARM64_REG_H6
+#define UC_ARM64_REG_H7 QC_ARM64_REG_H7
+#define UC_ARM64_REG_H8 QC_ARM64_REG_H8
+#define UC_ARM64_REG_H9 QC_ARM64_REG_H9
+#define UC_ARM64_REG_H10 QC_ARM64_REG_H10
+#define UC_ARM64_REG_H11 QC_ARM64_REG_H11
+#define UC_ARM64_REG_H12 QC_ARM64_REG_H12
+#define UC_ARM64_REG_H13 QC_ARM64_REG_H13
+#define UC_ARM64_REG_H14 QC_ARM64_REG_H14
+#define UC_ARM64_REG_H15 QC_ARM64_REG_H15
+#define UC_ARM64_REG_H16 QC_ARM64_REG_H16
+#define UC_ARM64_REG_H17 QC_ARM64_REG_H17
+#define UC_ARM64_REG_H18 QC_ARM64_REG_H18
+#define UC_ARM64_REG_H19 QC_ARM64_REG_H19
+#define UC_ARM64_REG_H20 QC_ARM64_REG_H20
+#define UC_ARM64_REG_H21 QC_ARM64_REG_H21
+#define UC_ARM64_REG_H22 QC_ARM64_REG_H22
+#define UC_ARM64_REG_H23 QC_ARM64_REG_H23
+#define UC_ARM64_REG_H24 QC_ARM64_REG_H24
+#define UC_ARM64_REG_H25 QC_ARM64_REG_H25
+#define UC_ARM64_REG_H26 QC_ARM64_REG_H26
+#define UC_ARM64_REG_H27 QC_ARM64_REG_H27
+#define UC_ARM64_REG_H28 QC_ARM64_REG_H28
+#define UC_ARM64_REG_H29 QC_ARM64_REG_H29
+#define UC_ARM64_REG_H30 QC_ARM64_REG_H30
+#define UC_ARM64_REG_H31 QC_ARM64_REG_H31
+#define UC_ARM64_REG_Q0 QC_ARM64_REG_Q0
+#define UC_ARM64_REG_Q1 QC_ARM64_REG_Q1
+#define UC_ARM64_REG_Q2 QC_ARM64_REG_Q2
+#define UC_ARM64_REG_Q3 QC_ARM64_REG_Q3
+#define UC_ARM64_REG_Q4 QC_ARM64_REG_Q4
+#define UC_ARM64_REG_Q5 QC_ARM64_REG_Q5
+#define UC_ARM64_REG_Q6 QC_ARM64_REG_Q6
+#define UC_ARM64_REG_Q7 QC_ARM64_REG_Q7
+#define UC_ARM64_REG_Q8 QC_ARM64_REG_Q8
+#define UC_ARM64_REG_Q9 QC_ARM64_REG_Q9
+#define UC_ARM64_REG_Q10 QC_ARM64_REG_Q10
+#define UC_ARM64_REG_Q11 QC_ARM64_REG_Q11
+#define UC_ARM64_REG_Q12 QC_ARM64_REG_Q12
+#define UC_ARM64_REG_Q13 QC_ARM64_REG_Q13
+#define UC_ARM64_REG_Q14 QC_ARM64_REG_Q14
+#define UC_ARM64_REG_Q15 QC_ARM64_REG_Q15
+#define UC_ARM64_REG_Q16 QC_ARM64_REG_Q16
+#define UC_ARM64_REG_Q17 QC_ARM64_REG_Q17
+#define UC_ARM64_REG_Q18 QC_ARM64_REG_Q18
+#define UC_ARM64_REG_Q19 QC_ARM64_REG_Q19
+#define UC_ARM64_REG_Q20 QC_ARM64_REG_Q20
+#define UC_ARM64_REG_Q21 QC_ARM64_REG_Q21
+#define UC_ARM64_REG_Q22 QC_ARM64_REG_Q22
+#define UC_ARM64_REG_Q23 QC_ARM64_REG_Q23
+#define UC_ARM64_REG_Q24 QC_ARM64_REG_Q24
+#define UC_ARM64_REG_Q25 QC_ARM64_REG_Q25
+#define UC_ARM64_REG_Q26 QC_ARM64_REG_Q26
+#define UC_ARM64_REG_Q27 QC_ARM64_REG_Q27
+#define UC_ARM64_REG_Q28 QC_ARM64_REG_Q28
+#define UC_ARM64_REG_Q29 QC_ARM64_REG_Q29
+#define UC_ARM64_REG_Q30 QC_ARM64_REG_Q30
+#define UC_ARM64_REG_Q31 QC_ARM64_REG_Q31
+#define UC_ARM64_REG_S0 QC_ARM64_REG_S0
+#define UC_ARM64_REG_S1 QC_ARM64_REG_S1
+#define UC_ARM64_REG_S2 QC_ARM64_REG_S2
+#define UC_ARM64_REG_S3 QC_ARM64_REG_S3
+#define UC_ARM64_REG_S4 QC_ARM64_REG_S4
+#define UC_ARM64_REG_S5 QC_ARM64_REG_S5
+#define UC_ARM64_REG_S6 QC_ARM64_REG_S6
+#define UC_ARM64_REG_S7 QC_ARM64_REG_S7
+#define UC_ARM64_REG_S8 QC_ARM64_REG_S8
+#define UC_ARM64_REG_S9 QC_ARM64_REG_S9
+#define UC_ARM64_REG_S10 QC_ARM64_REG_S10
+#define UC_ARM64_REG_S11 QC_ARM64_REG_S11
+#define UC_ARM64_REG_S12 QC_ARM64_REG_S12
+#define UC_ARM64_REG_S13 QC_ARM64_REG_S13
+#define UC_ARM64_REG_S14 QC_ARM64_REG_S14
+#define UC_ARM64_REG_S15 QC_ARM64_REG_S15
+#define UC_ARM64_REG_S16 QC_ARM64_REG_S16
+#define UC_ARM64_REG_S17 QC_ARM64_REG_S17
+#define UC_ARM64_REG_S18 QC_ARM64_REG_S18
+#define UC_ARM64_REG_S19 QC_ARM64_REG_S19
+#define UC_ARM64_REG_S20 QC_ARM64_REG_S20
+#define UC_ARM64_REG_S21 QC_ARM64_REG_S21
+#define UC_ARM64_REG_S22 QC_ARM64_REG_S22
+#define UC_ARM64_REG_S23 QC_ARM64_REG_S23
+#define UC_ARM64_REG_S24 QC_ARM64_REG_S24
+#define UC_ARM64_REG_S25 QC_ARM64_REG_S25
+#define UC_ARM64_REG_S26 QC_ARM64_REG_S26
+#define UC_ARM64_REG_S27 QC_ARM64_REG_S27
+#define UC_ARM64_REG_S28 QC_ARM64_REG_S28
+#define UC_ARM64_REG_S29 QC_ARM64_REG_S29
+#define UC_ARM64_REG_S30 QC_ARM64_REG_S30
+#define UC_ARM64_REG_S31 QC_ARM64_REG_S31
+#define UC_ARM64_REG_W0 QC_ARM64_REG_W0
+#define UC_ARM64_REG_W1 QC_ARM64_REG_W1
+#define UC_ARM64_REG_W2 QC_ARM64_REG_W2
+#define UC_ARM64_REG_W3 QC_ARM64_REG_W3
+#define UC_ARM64_REG_W4 QC_ARM64_REG_W4
+#define UC_ARM64_REG_W5 QC_ARM64_REG_W5
+#define UC_ARM64_REG_W6 QC_ARM64_REG_W6
+#define UC_ARM64_REG_W7 QC_ARM64_REG_W7
+#define UC_ARM64_REG_W8 QC_ARM64_REG_W8
+#define UC_ARM64_REG_W9 QC_ARM64_REG_W9
+#define UC_ARM64_REG_W10 QC_ARM64_REG_W10
+#define UC_ARM64_REG_W11 QC_ARM64_REG_W11
+#define UC_ARM64_REG_W12 QC_ARM64_REG_W12
+#define UC_ARM64_REG_W13 QC_ARM64_REG_W13
+#define UC_ARM64_REG_W14 QC_ARM64_REG_W14
+#define UC_ARM64_REG_W15 QC_ARM64_REG_W15
+#define UC_ARM64_REG_W16 QC_ARM64_REG_W16
+#define UC_ARM64_REG_W17 QC_ARM64_REG_W17
+#define UC_ARM64_REG_W18 QC_ARM64_REG_W18
+#define UC_ARM64_REG_W19 QC_ARM64_REG_W19
+#define UC_ARM64_REG_W20 QC_ARM64_REG_W20
+#define UC_ARM64_REG_W21 QC_ARM64_REG_W21
+#define UC_ARM64_REG_W22 QC_ARM64_REG_W22
+#define UC_ARM64_REG_W23 QC_ARM64_REG_W23
+#define UC_ARM64_REG_W24 QC_ARM64_REG_W24
+#define UC_ARM64_REG_W25 QC_ARM64_REG_W25
+#define UC_ARM64_REG_W26 QC_ARM64_REG_W26
+#define UC_ARM64_REG_W27 QC_ARM64_REG_W27
+#define UC_ARM64_REG_W28 QC_ARM64_REG_W28
+#define UC_ARM64_REG_W29 QC_ARM64_REG_W29
+#define UC_ARM64_REG_W30 QC_ARM64_REG_W30
+#define UC_ARM64_REG_X0 QC_ARM64_REG_X0
+#define UC_ARM64_REG_X1 QC_ARM64_REG_X1
+#define UC_ARM64_REG_X2 QC_ARM64_REG_X2
+#define UC_ARM64_REG_X3 QC_ARM64_REG_X3
+#define UC_ARM64_REG_X4 QC_ARM64_REG_X4
+#define UC_ARM64_REG_X5 QC_ARM64_REG_X5
+#define UC_ARM64_REG_X6 QC_ARM64_REG_X6
+#define UC_ARM64_REG_X7 QC_ARM64_REG_X7
+#define UC_ARM64_REG_X8 QC_ARM64_REG_X8
+#define UC_ARM64_REG_X9 QC_ARM64_REG_X9
+#define UC_ARM64_REG_X10 QC_ARM64_REG_X10
+#define UC_ARM64_REG_X11 QC_ARM64_REG_X11
+#define UC_ARM64_REG_X12 QC_ARM64_REG_X12
+#define UC_ARM64_REG_X13 QC_ARM64_REG_X13
+#define UC_ARM64_REG_X14 QC_ARM64_REG_X14
+#define UC_ARM64_REG_X15 QC_ARM64_REG_X15
+#define UC_ARM64_REG_X16 QC_ARM64_REG_X16
+#define UC_ARM64_REG_X17 QC_ARM64_REG_X17
+#define UC_ARM64_REG_X18 QC_ARM64_REG_X18
+#define UC_ARM64_REG_X19 QC_ARM64_REG_X19
+#define UC_ARM64_REG_X20 QC_ARM64_REG_X20
+#define UC_ARM64_REG_X21 QC_ARM64_REG_X21
+#define UC_ARM64_REG_X22 QC_ARM64_REG_X22
+#define UC_ARM64_REG_X23 QC_ARM64_REG_X23
+#define UC_ARM64_REG_X24 QC_ARM64_REG_X24
+#define UC_ARM64_REG_X25 QC_ARM64_REG_X25
+#define UC_ARM64_REG_X26 QC_ARM64_REG_X26
+#define UC_ARM64_REG_X27 QC_ARM64_REG_X27
+#define UC_ARM64_REG_X28 QC_ARM64_REG_X28
+#define UC_ARM64_REG_V0 QC_ARM64_REG_V0
+#define UC_ARM64_REG_V1 QC_ARM64_REG_V1
+#define UC_ARM64_REG_V2 QC_ARM64_REG_V2
+#define UC_ARM64_REG_V3 QC_ARM64_REG_V3
+#define UC_ARM64_REG_V4 QC_ARM64_REG_V4
+#define UC_ARM64_REG_V5 QC_ARM64_REG_V5
+#define UC_ARM64_REG_V6 QC_ARM64_REG_V6
+#define UC_ARM64_REG_V7 QC_ARM64_REG_V7
+#define UC_ARM64_REG_V8 QC_ARM64_REG_V8
+#define UC_ARM64_REG_V9 QC_ARM64_REG_V9
+#define UC_ARM64_REG_V10 QC_ARM64_REG_V10
+#define UC_ARM64_REG_V11 QC_ARM64_REG_V11
+#define UC_ARM64_REG_V12 QC_ARM64_REG_V12
+#define UC_ARM64_REG_V13 QC_ARM64_REG_V13
+#define UC_ARM64_REG_V14 QC_ARM64_REG_V14
+#define UC_ARM64_REG_V15 QC_ARM64_REG_V15
+#define UC_ARM64_REG_V16 QC_ARM64_REG_V16
+#define UC_ARM64_REG_V17 QC_ARM64_REG_V17
+#define UC_ARM64_REG_V18 QC_ARM64_REG_V18
+#define UC_ARM64_REG_V19 QC_ARM64_REG_V19
+#define UC_ARM64_REG_V20 QC_ARM64_REG_V20
+#define UC_ARM64_REG_V21 QC_ARM64_REG_V21
+#define UC_ARM64_REG_V22 QC_ARM64_REG_V22
+#define UC_ARM64_REG_V23 QC_ARM64_REG_V23
+#define UC_ARM64_REG_V24 QC_ARM64_REG_V24
+#define UC_ARM64_REG_V25 QC_ARM64_REG_V25
+#define UC_ARM64_REG_V26 QC_ARM64_REG_V26
+#define UC_ARM64_REG_V27 QC_ARM64_REG_V27
+#define UC_ARM64_REG_V28 QC_ARM64_REG_V28
+#define UC_ARM64_REG_V29 QC_ARM64_REG_V29
+#define UC_ARM64_REG_V30 QC_ARM64_REG_V30
+#define UC_ARM64_REG_V31 QC_ARM64_REG_V31
+#define UC_ARM64_REG_PC QC_ARM64_REG_PC
+#define UC_ARM64_REG_CPACR_EL1 QC_ARM64_REG_CPACR_EL1
+#define UC_ARM64_REG_TPIDR_EL0 QC_ARM64_REG_TPIDR_EL0
+#define UC_ARM64_REG_TPIDRRO_EL0 QC_ARM64_REG_TPIDRRO_EL0
+#define UC_ARM64_REG_TPIDR_EL1 QC_ARM64_REG_TPIDR_EL1
+#define UC_ARM64_REG_PSTATE QC_ARM64_REG_PSTATE
+#define UC_ARM64_REG_ELR_EL0 QC_ARM64_REG_ELR_EL0
+#define UC_ARM64_REG_ELR_EL1 QC_ARM64_REG_ELR_EL1
+#define UC_ARM64_REG_ELR_EL2 QC_ARM64_REG_ELR_EL2
+#define UC_ARM64_REG_ELR_EL3 QC_ARM64_REG_ELR_EL3
+#define UC_ARM64_REG_SP_EL0 QC_ARM64_REG_SP_EL0
+#define UC_ARM64_REG_SP_EL1 QC_ARM64_REG_SP_EL1
+#define UC_ARM64_REG_SP_EL2 QC_ARM64_REG_SP_EL2
+#define UC_ARM64_REG_SP_EL3 QC_ARM64_REG_SP_EL3
+#define UC_ARM64_REG_TTBR0_EL1 QC_ARM64_REG_TTBR0_EL1
+#define UC_ARM64_REG_TTBR1_EL1 QC_ARM64_REG_TTBR1_EL1
+#define UC_ARM64_REG_ESR_EL0 QC_ARM64_REG_ESR_EL0
+#define UC_ARM64_REG_ESR_EL1 QC_ARM64_REG_ESR_EL1
+#define UC_ARM64_REG_ESR_EL2 QC_ARM64_REG_ESR_EL2
+#define UC_ARM64_REG_ESR_EL3 QC_ARM64_REG_ESR_EL3
+#define UC_ARM64_REG_FAR_EL0 QC_ARM64_REG_FAR_EL0
+#define UC_ARM64_REG_FAR_EL1 QC_ARM64_REG_FAR_EL1
+#define UC_ARM64_REG_FAR_EL2 QC_ARM64_REG_FAR_EL2
+#define UC_ARM64_REG_FAR_EL3 QC_ARM64_REG_FAR_EL3
+#define UC_ARM64_REG_PAR_EL1 QC_ARM64_REG_PAR_EL1
+#define UC_ARM64_REG_MAIR_EL1 QC_ARM64_REG_MAIR_EL1
+#define UC_ARM64_REG_VBAR_EL0 QC_ARM64_REG_VBAR_EL0
+#define UC_ARM64_REG_VBAR_EL1 QC_ARM64_REG_VBAR_EL1
+#define UC_ARM64_REG_VBAR_EL2 QC_ARM64_REG_VBAR_EL2
+#define UC_ARM64_REG_VBAR_EL3 QC_ARM64_REG_VBAR_EL3
+#define UC_ARM64_REG_ENDING QC_ARM64_REG_ENDING
+#define UC_ARM64_REG_IP0 QC_ARM64_REG_IP0
+#define UC_ARM64_REG_IP1 QC_ARM64_REG_IP1
+#define UC_ARM64_REG_FP QC_ARM64_REG_FP
+#define UC_ARM64_REG_LR QC_ARM64_REG_LR
+#define UC_CPU_MIPS32_4KC QC_CPU_MIPS32_4KC
+#define UC_CPU_MIPS32_4KM QC_CPU_MIPS32_4KM
+#define UC_CPU_MIPS32_4KECR1 QC_CPU_MIPS32_4KECR1
+#define UC_CPU_MIPS32_4KEMR1 QC_CPU_MIPS32_4KEMR1
+#define UC_CPU_MIPS32_4KEC QC_CPU_MIPS32_4KEC
+#define UC_CPU_MIPS32_4KEM QC_CPU_MIPS32_4KEM
+#define UC_CPU_MIPS32_24KC QC_CPU_MIPS32_24KC
+#define UC_CPU_MIPS32_24KEC QC_CPU_MIPS32_24KEC
+#define UC_CPU_MIPS32_24KF QC_CPU_MIPS32_24KF
+#define UC_CPU_MIPS32_34KF QC_CPU_MIPS32_34KF
+#define UC_CPU_MIPS32_74KF QC_CPU_MIPS32_74KF
+#define UC_CPU_MIPS32_M14K QC_CPU_MIPS32_M14K
+#define UC_CPU_MIPS32_M14KC QC_CPU_MIPS32_M14KC
+#define UC_CPU_MIPS32_P5600 QC_CPU_MIPS32_P5600
+#define UC_CPU_MIPS32_MIPS32R6_GENERIC QC_CPU_MIPS32_MIPS32R6_GENERIC
+#define UC_CPU_MIPS32_I7200 QC_CPU_MIPS32_I7200
+#define UC_CPU_MIPS64_R4000 QC_CPU_MIPS64_R4000
+#define UC_CPU_MIPS64_VR5432 QC_CPU_MIPS64_VR5432
+#define UC_CPU_MIPS64_5KC QC_CPU_MIPS64_5KC
+#define UC_CPU_MIPS64_5KF QC_CPU_MIPS64_5KF
+#define UC_CPU_MIPS64_20KC QC_CPU_MIPS64_20KC
+#define UC_CPU_MIPS64_MIPS64R2_GENERIC QC_CPU_MIPS64_MIPS64R2_GENERIC
+#define UC_CPU_MIPS64_5KEC QC_CPU_MIPS64_5KEC
+#define UC_CPU_MIPS64_5KEF QC_CPU_MIPS64_5KEF
+#define UC_CPU_MIPS64_I6400 QC_CPU_MIPS64_I6400
+#define UC_CPU_MIPS64_I6500 QC_CPU_MIPS64_I6500
+#define UC_CPU_MIPS64_LOONGSON_2E QC_CPU_MIPS64_LOONGSON_2E
+#define UC_CPU_MIPS64_LOONGSON_2F QC_CPU_MIPS64_LOONGSON_2F
+#define UC_CPU_MIPS64_MIPS64DSPR2 QC_CPU_MIPS64_MIPS64DSPR2
+#define UC_MIPS_REG_INVALID QC_MIPS_REG_INVALID
+#define UC_MIPS_REG_PC QC_MIPS_REG_PC
+#define UC_MIPS_REG_0 QC_MIPS_REG_0
+#define UC_MIPS_REG_1 QC_MIPS_REG_1
+#define UC_MIPS_REG_2 QC_MIPS_REG_2
+#define UC_MIPS_REG_3 QC_MIPS_REG_3
+#define UC_MIPS_REG_4 QC_MIPS_REG_4
+#define UC_MIPS_REG_5 QC_MIPS_REG_5
+#define UC_MIPS_REG_6 QC_MIPS_REG_6
+#define UC_MIPS_REG_7 QC_MIPS_REG_7
+#define UC_MIPS_REG_8 QC_MIPS_REG_8
+#define UC_MIPS_REG_9 QC_MIPS_REG_9
+#define UC_MIPS_REG_10 QC_MIPS_REG_10
+#define UC_MIPS_REG_11 QC_MIPS_REG_11
+#define UC_MIPS_REG_12 QC_MIPS_REG_12
+#define UC_MIPS_REG_13 QC_MIPS_REG_13
+#define UC_MIPS_REG_14 QC_MIPS_REG_14
+#define UC_MIPS_REG_15 QC_MIPS_REG_15
+#define UC_MIPS_REG_16 QC_MIPS_REG_16
+#define UC_MIPS_REG_17 QC_MIPS_REG_17
+#define UC_MIPS_REG_18 QC_MIPS_REG_18
+#define UC_MIPS_REG_19 QC_MIPS_REG_19
+#define UC_MIPS_REG_20 QC_MIPS_REG_20
+#define UC_MIPS_REG_21 QC_MIPS_REG_21
+#define UC_MIPS_REG_22 QC_MIPS_REG_22
+#define UC_MIPS_REG_23 QC_MIPS_REG_23
+#define UC_MIPS_REG_24 QC_MIPS_REG_24
+#define UC_MIPS_REG_25 QC_MIPS_REG_25
+#define UC_MIPS_REG_26 QC_MIPS_REG_26
+#define UC_MIPS_REG_27 QC_MIPS_REG_27
+#define UC_MIPS_REG_28 QC_MIPS_REG_28
+#define UC_MIPS_REG_29 QC_MIPS_REG_29
+#define UC_MIPS_REG_30 QC_MIPS_REG_30
+#define UC_MIPS_REG_31 QC_MIPS_REG_31
+#define UC_MIPS_REG_DSPCCOND QC_MIPS_REG_DSPCCOND
+#define UC_MIPS_REG_DSPCARRY QC_MIPS_REG_DSPCARRY
+#define UC_MIPS_REG_DSPEFI QC_MIPS_REG_DSPEFI
+#define UC_MIPS_REG_DSPOUTFLAG QC_MIPS_REG_DSPOUTFLAG
+#define UC_MIPS_REG_DSPOUTFLAG16_19 QC_MIPS_REG_DSPOUTFLAG16_19
+#define UC_MIPS_REG_DSPOUTFLAG20 QC_MIPS_REG_DSPOUTFLAG20
+#define UC_MIPS_REG_DSPOUTFLAG21 QC_MIPS_REG_DSPOUTFLAG21
+#define UC_MIPS_REG_DSPOUTFLAG22 QC_MIPS_REG_DSPOUTFLAG22
+#define UC_MIPS_REG_DSPOUTFLAG23 QC_MIPS_REG_DSPOUTFLAG23
+#define UC_MIPS_REG_DSPPOS QC_MIPS_REG_DSPPOS
+#define UC_MIPS_REG_DSPSCOUNT QC_MIPS_REG_DSPSCOUNT
+#define UC_MIPS_REG_AC0 QC_MIPS_REG_AC0
+#define UC_MIPS_REG_AC1 QC_MIPS_REG_AC1
+#define UC_MIPS_REG_AC2 QC_MIPS_REG_AC2
+#define UC_MIPS_REG_AC3 QC_MIPS_REG_AC3
+#define UC_MIPS_REG_CC0 QC_MIPS_REG_CC0
+#define UC_MIPS_REG_CC1 QC_MIPS_REG_CC1
+#define UC_MIPS_REG_CC2 QC_MIPS_REG_CC2
+#define UC_MIPS_REG_CC3 QC_MIPS_REG_CC3
+#define UC_MIPS_REG_CC4 QC_MIPS_REG_CC4
+#define UC_MIPS_REG_CC5 QC_MIPS_REG_CC5
+#define UC_MIPS_REG_CC6 QC_MIPS_REG_CC6
+#define UC_MIPS_REG_CC7 QC_MIPS_REG_CC7
+#define UC_MIPS_REG_F0 QC_MIPS_REG_F0
+#define UC_MIPS_REG_F1 QC_MIPS_REG_F1
+#define UC_MIPS_REG_F2 QC_MIPS_REG_F2
+#define UC_MIPS_REG_F3 QC_MIPS_REG_F3
+#define UC_MIPS_REG_F4 QC_MIPS_REG_F4
+#define UC_MIPS_REG_F5 QC_MIPS_REG_F5
+#define UC_MIPS_REG_F6 QC_MIPS_REG_F6
+#define UC_MIPS_REG_F7 QC_MIPS_REG_F7
+#define UC_MIPS_REG_F8 QC_MIPS_REG_F8
+#define UC_MIPS_REG_F9 QC_MIPS_REG_F9
+#define UC_MIPS_REG_F10 QC_MIPS_REG_F10
+#define UC_MIPS_REG_F11 QC_MIPS_REG_F11
+#define UC_MIPS_REG_F12 QC_MIPS_REG_F12
+#define UC_MIPS_REG_F13 QC_MIPS_REG_F13
+#define UC_MIPS_REG_F14 QC_MIPS_REG_F14
+#define UC_MIPS_REG_F15 QC_MIPS_REG_F15
+#define UC_MIPS_REG_F16 QC_MIPS_REG_F16
+#define UC_MIPS_REG_F17 QC_MIPS_REG_F17
+#define UC_MIPS_REG_F18 QC_MIPS_REG_F18
+#define UC_MIPS_REG_F19 QC_MIPS_REG_F19
+#define UC_MIPS_REG_F20 QC_MIPS_REG_F20
+#define UC_MIPS_REG_F21 QC_MIPS_REG_F21
+#define UC_MIPS_REG_F22 QC_MIPS_REG_F22
+#define UC_MIPS_REG_F23 QC_MIPS_REG_F23
+#define UC_MIPS_REG_F24 QC_MIPS_REG_F24
+#define UC_MIPS_REG_F25 QC_MIPS_REG_F25
+#define UC_MIPS_REG_F26 QC_MIPS_REG_F26
+#define UC_MIPS_REG_F27 QC_MIPS_REG_F27
+#define UC_MIPS_REG_F28 QC_MIPS_REG_F28
+#define UC_MIPS_REG_F29 QC_MIPS_REG_F29
+#define UC_MIPS_REG_F30 QC_MIPS_REG_F30
+#define UC_MIPS_REG_F31 QC_MIPS_REG_F31
+#define UC_MIPS_REG_FCC0 QC_MIPS_REG_FCC0
+#define UC_MIPS_REG_FCC1 QC_MIPS_REG_FCC1
+#define UC_MIPS_REG_FCC2 QC_MIPS_REG_FCC2
+#define UC_MIPS_REG_FCC3 QC_MIPS_REG_FCC3
+#define UC_MIPS_REG_FCC4 QC_MIPS_REG_FCC4
+#define UC_MIPS_REG_FCC5 QC_MIPS_REG_FCC5
+#define UC_MIPS_REG_FCC6 QC_MIPS_REG_FCC6
+#define UC_MIPS_REG_FCC7 QC_MIPS_REG_FCC7
+#define UC_MIPS_REG_W0 QC_MIPS_REG_W0
+#define UC_MIPS_REG_W1 QC_MIPS_REG_W1
+#define UC_MIPS_REG_W2 QC_MIPS_REG_W2
+#define UC_MIPS_REG_W3 QC_MIPS_REG_W3
+#define UC_MIPS_REG_W4 QC_MIPS_REG_W4
+#define UC_MIPS_REG_W5 QC_MIPS_REG_W5
+#define UC_MIPS_REG_W6 QC_MIPS_REG_W6
+#define UC_MIPS_REG_W7 QC_MIPS_REG_W7
+#define UC_MIPS_REG_W8 QC_MIPS_REG_W8
+#define UC_MIPS_REG_W9 QC_MIPS_REG_W9
+#define UC_MIPS_REG_W10 QC_MIPS_REG_W10
+#define UC_MIPS_REG_W11 QC_MIPS_REG_W11
+#define UC_MIPS_REG_W12 QC_MIPS_REG_W12
+#define UC_MIPS_REG_W13 QC_MIPS_REG_W13
+#define UC_MIPS_REG_W14 QC_MIPS_REG_W14
+#define UC_MIPS_REG_W15 QC_MIPS_REG_W15
+#define UC_MIPS_REG_W16 QC_MIPS_REG_W16
+#define UC_MIPS_REG_W17 QC_MIPS_REG_W17
+#define UC_MIPS_REG_W18 QC_MIPS_REG_W18
+#define UC_MIPS_REG_W19 QC_MIPS_REG_W19
+#define UC_MIPS_REG_W20 QC_MIPS_REG_W20
+#define UC_MIPS_REG_W21 QC_MIPS_REG_W21
+#define UC_MIPS_REG_W22 QC_MIPS_REG_W22
+#define UC_MIPS_REG_W23 QC_MIPS_REG_W23
+#define UC_MIPS_REG_W24 QC_MIPS_REG_W24
+#define UC_MIPS_REG_W25 QC_MIPS_REG_W25
+#define UC_MIPS_REG_W26 QC_MIPS_REG_W26
+#define UC_MIPS_REG_W27 QC_MIPS_REG_W27
+#define UC_MIPS_REG_W28 QC_MIPS_REG_W28
+#define UC_MIPS_REG_W29 QC_MIPS_REG_W29
+#define UC_MIPS_REG_W30 QC_MIPS_REG_W30
+#define UC_MIPS_REG_W31 QC_MIPS_REG_W31
+#define UC_MIPS_REG_HI QC_MIPS_REG_HI
+#define UC_MIPS_REG_LO QC_MIPS_REG_LO
+#define UC_MIPS_REG_P0 QC_MIPS_REG_P0
+#define UC_MIPS_REG_P1 QC_MIPS_REG_P1
+#define UC_MIPS_REG_P2 QC_MIPS_REG_P2
+#define UC_MIPS_REG_MPL0 QC_MIPS_REG_MPL0
+#define UC_MIPS_REG_MPL1 QC_MIPS_REG_MPL1
+#define UC_MIPS_REG_MPL2 QC_MIPS_REG_MPL2
+#define UC_MIPS_REG_CP0_CONFIG3 QC_MIPS_REG_CP0_CONFIG3
+#define UC_MIPS_REG_CP0_USERLOCAL QC_MIPS_REG_CP0_USERLOCAL
+#define UC_MIPS_REG_CP0_STATUS QC_MIPS_REG_CP0_STATUS
+#define UC_MIPS_REG_ENDING QC_MIPS_REG_ENDING
+#define UC_MIPS_REG_ZERO QC_MIPS_REG_ZERO
+#define UC_MIPS_REG_AT QC_MIPS_REG_AT
+#define UC_MIPS_REG_V0 QC_MIPS_REG_V0
+#define UC_MIPS_REG_V1 QC_MIPS_REG_V1
+#define UC_MIPS_REG_A0 QC_MIPS_REG_A0
+#define UC_MIPS_REG_A1 QC_MIPS_REG_A1
+#define UC_MIPS_REG_A2 QC_MIPS_REG_A2
+#define UC_MIPS_REG_A3 QC_MIPS_REG_A3
+#define UC_MIPS_REG_T0 QC_MIPS_REG_T0
+#define UC_MIPS_REG_T1 QC_MIPS_REG_T1
+#define UC_MIPS_REG_T2 QC_MIPS_REG_T2
+#define UC_MIPS_REG_T3 QC_MIPS_REG_T3
+#define UC_MIPS_REG_T4 QC_MIPS_REG_T4
+#define UC_MIPS_REG_T5 QC_MIPS_REG_T5
+#define UC_MIPS_REG_T6 QC_MIPS_REG_T6
+#define UC_MIPS_REG_T7 QC_MIPS_REG_T7
+#define UC_MIPS_REG_S0 QC_MIPS_REG_S0
+#define UC_MIPS_REG_S1 QC_MIPS_REG_S1
+#define UC_MIPS_REG_S2 QC_MIPS_REG_S2
+#define UC_MIPS_REG_S3 QC_MIPS_REG_S3
+#define UC_MIPS_REG_S4 QC_MIPS_REG_S4
+#define UC_MIPS_REG_S5 QC_MIPS_REG_S5
+#define UC_MIPS_REG_S6 QC_MIPS_REG_S6
+#define UC_MIPS_REG_S7 QC_MIPS_REG_S7
+#define UC_MIPS_REG_T8 QC_MIPS_REG_T8
+#define UC_MIPS_REG_T9 QC_MIPS_REG_T9
+#define UC_MIPS_REG_K0 QC_MIPS_REG_K0
+#define UC_MIPS_REG_K1 QC_MIPS_REG_K1
+#define UC_MIPS_REG_GP QC_MIPS_REG_GP
+#define UC_MIPS_REG_SP QC_MIPS_REG_SP
+#define UC_MIPS_REG_FP QC_MIPS_REG_FP
+#define UC_MIPS_REG_S8 QC_MIPS_REG_S8
+#define UC_MIPS_REG_RA QC_MIPS_REG_RA
+#define UC_MIPS_REG_HI0 QC_MIPS_REG_HI0
+#define UC_MIPS_REG_HI1 QC_MIPS_REG_HI1
+#define UC_MIPS_REG_HI2 QC_MIPS_REG_HI2
+#define UC_MIPS_REG_HI3 QC_MIPS_REG_HI3
+#define UC_MIPS_REG_LO0 QC_MIPS_REG_LO0
+#define UC_MIPS_REG_LO1 QC_MIPS_REG_LO1
+#define UC_MIPS_REG_LO2 QC_MIPS_REG_LO2
+#define UC_MIPS_REG_LO3 QC_MIPS_REG_LO3
+#define UC_CPU_X86_QEMU64 QC_CPU_X86_QEMU64
+#define UC_CPU_X86_PHENOM QC_CPU_X86_PHENOM
+#define UC_CPU_X86_CORE2DUO QC_CPU_X86_CORE2DUO
+#define UC_CPU_X86_KVM64 QC_CPU_X86_KVM64
+#define UC_CPU_X86_QEMU32 QC_CPU_X86_QEMU32
+#define UC_CPU_X86_KVM32 QC_CPU_X86_KVM32
+#define UC_CPU_X86_COREDUO QC_CPU_X86_COREDUO
+#define UC_CPU_X86_486 QC_CPU_X86_486
+#define UC_CPU_X86_PENTIUM QC_CPU_X86_PENTIUM
+#define UC_CPU_X86_PENTIUM2 QC_CPU_X86_PENTIUM2
+#define UC_CPU_X86_PENTIUM3 QC_CPU_X86_PENTIUM3
+#define UC_CPU_X86_ATHLON QC_CPU_X86_ATHLON
+#define UC_CPU_X86_N270 QC_CPU_X86_N270
+#define UC_CPU_X86_CONROE QC_CPU_X86_CONROE
+#define UC_CPU_X86_PENRYN QC_CPU_X86_PENRYN
+#define UC_CPU_X86_NEHALEM QC_CPU_X86_NEHALEM
+#define UC_CPU_X86_WESTMERE QC_CPU_X86_WESTMERE
+#define UC_CPU_X86_SANDYBRIDGE QC_CPU_X86_SANDYBRIDGE
+#define UC_CPU_X86_IVYBRIDGE QC_CPU_X86_IVYBRIDGE
+#define UC_CPU_X86_HASWELL QC_CPU_X86_HASWELL
+#define UC_CPU_X86_BROADWELL QC_CPU_X86_BROADWELL
+#define UC_CPU_X86_SKYLAKE_CLIENT QC_CPU_X86_SKYLAKE_CLIENT
+#define UC_CPU_X86_SKYLAKE_SERVER QC_CPU_X86_SKYLAKE_SERVER
+#define UC_CPU_X86_CASCADELAKE_SERVER QC_CPU_X86_CASCADELAKE_SERVER
+#define UC_CPU_X86_COOPERLAKE QC_CPU_X86_COOPERLAKE
+#define UC_CPU_X86_ICELAKE_CLIENT QC_CPU_X86_ICELAKE_CLIENT
+#define UC_CPU_X86_ICELAKE_SERVER QC_CPU_X86_ICELAKE_SERVER
+#define UC_CPU_X86_DENVERTON QC_CPU_X86_DENVERTON
+#define UC_CPU_X86_SNOWRIDGE QC_CPU_X86_SNOWRIDGE
+#define UC_CPU_X86_KNIGHTSMILL QC_CPU_X86_KNIGHTSMILL
+#define UC_CPU_X86_OPTERON_G1 QC_CPU_X86_OPTERON_G1
+#define UC_CPU_X86_OPTERON_G2 QC_CPU_X86_OPTERON_G2
+#define UC_CPU_X86_OPTERON_G3 QC_CPU_X86_OPTERON_G3
+#define UC_CPU_X86_OPTERON_G4 QC_CPU_X86_OPTERON_G4
+#define UC_CPU_X86_OPTERON_G5 QC_CPU_X86_OPTERON_G5
+#define UC_CPU_X86_EPYC QC_CPU_X86_EPYC
+#define UC_CPU_X86_DHYANA QC_CPU_X86_DHYANA
+#define UC_CPU_X86_EPYC_ROME QC_CPU_X86_EPYC_ROME
+#define UC_X86_REG_INVALID QC_X86_REG_INVALID
+#define UC_X86_REG_AH QC_X86_REG_AH
+#define UC_X86_REG_AL QC_X86_REG_AL
+#define UC_X86_REG_AX QC_X86_REG_AX
+#define UC_X86_REG_BH QC_X86_REG_BH
+#define UC_X86_REG_BL QC_X86_REG_BL
+#define UC_X86_REG_BP QC_X86_REG_BP
+#define UC_X86_REG_BPL QC_X86_REG_BPL
+#define UC_X86_REG_BX QC_X86_REG_BX
+#define UC_X86_REG_CH QC_X86_REG_CH
+#define UC_X86_REG_CL QC_X86_REG_CL
+#define UC_X86_REG_CS QC_X86_REG_CS
+#define UC_X86_REG_CX QC_X86_REG_CX
+#define UC_X86_REG_DH QC_X86_REG_DH
+#define UC_X86_REG_DI QC_X86_REG_DI
+#define UC_X86_REG_DIL QC_X86_REG_DIL
+#define UC_X86_REG_DL QC_X86_REG_DL
+#define UC_X86_REG_DS QC_X86_REG_DS
+#define UC_X86_REG_DX QC_X86_REG_DX
+#define UC_X86_REG_EAX QC_X86_REG_EAX
+#define UC_X86_REG_EBP QC_X86_REG_EBP
+#define UC_X86_REG_EBX QC_X86_REG_EBX
+#define UC_X86_REG_ECX QC_X86_REG_ECX
+#define UC_X86_REG_EDI QC_X86_REG_EDI
+#define UC_X86_REG_EDX QC_X86_REG_EDX
+#define UC_X86_REG_EFLAGS QC_X86_REG_EFLAGS
+#define UC_X86_REG_EIP QC_X86_REG_EIP
+#define UC_X86_REG_ES QC_X86_REG_ES
+#define UC_X86_REG_ESI QC_X86_REG_ESI
+#define UC_X86_REG_ESP QC_X86_REG_ESP
+#define UC_X86_REG_FPSW QC_X86_REG_FPSW
+#define UC_X86_REG_FS QC_X86_REG_FS
+#define UC_X86_REG_GS QC_X86_REG_GS
+#define UC_X86_REG_IP QC_X86_REG_IP
+#define UC_X86_REG_RAX QC_X86_REG_RAX
+#define UC_X86_REG_RBP QC_X86_REG_RBP
+#define UC_X86_REG_RBX QC_X86_REG_RBX
+#define UC_X86_REG_RCX QC_X86_REG_RCX
+#define UC_X86_REG_RDI QC_X86_REG_RDI
+#define UC_X86_REG_RDX QC_X86_REG_RDX
+#define UC_X86_REG_RIP QC_X86_REG_RIP
+#define UC_X86_REG_RSI QC_X86_REG_RSI
+#define UC_X86_REG_RSP QC_X86_REG_RSP
+#define UC_X86_REG_SI QC_X86_REG_SI
+#define UC_X86_REG_SIL QC_X86_REG_SIL
+#define UC_X86_REG_SP QC_X86_REG_SP
+#define UC_X86_REG_SPL QC_X86_REG_SPL
+#define UC_X86_REG_SS QC_X86_REG_SS
+#define UC_X86_REG_CR0 QC_X86_REG_CR0
+#define UC_X86_REG_CR1 QC_X86_REG_CR1
+#define UC_X86_REG_CR2 QC_X86_REG_CR2
+#define UC_X86_REG_CR3 QC_X86_REG_CR3
+#define UC_X86_REG_CR4 QC_X86_REG_CR4
+#define UC_X86_REG_CR8 QC_X86_REG_CR8
+#define UC_X86_REG_DR0 QC_X86_REG_DR0
+#define UC_X86_REG_DR1 QC_X86_REG_DR1
+#define UC_X86_REG_DR2 QC_X86_REG_DR2
+#define UC_X86_REG_DR3 QC_X86_REG_DR3
+#define UC_X86_REG_DR4 QC_X86_REG_DR4
+#define UC_X86_REG_DR5 QC_X86_REG_DR5
+#define UC_X86_REG_DR6 QC_X86_REG_DR6
+#define UC_X86_REG_DR7 QC_X86_REG_DR7
+#define UC_X86_REG_FP0 QC_X86_REG_FP0
+#define UC_X86_REG_FP1 QC_X86_REG_FP1
+#define UC_X86_REG_FP2 QC_X86_REG_FP2
+#define UC_X86_REG_FP3 QC_X86_REG_FP3
+#define UC_X86_REG_FP4 QC_X86_REG_FP4
+#define UC_X86_REG_FP5 QC_X86_REG_FP5
+#define UC_X86_REG_FP6 QC_X86_REG_FP6
+#define UC_X86_REG_FP7 QC_X86_REG_FP7
+#define UC_X86_REG_K0 QC_X86_REG_K0
+#define UC_X86_REG_K1 QC_X86_REG_K1
+#define UC_X86_REG_K2 QC_X86_REG_K2
+#define UC_X86_REG_K3 QC_X86_REG_K3
+#define UC_X86_REG_K4 QC_X86_REG_K4
+#define UC_X86_REG_K5 QC_X86_REG_K5
+#define UC_X86_REG_K6 QC_X86_REG_K6
+#define UC_X86_REG_K7 QC_X86_REG_K7
+#define UC_X86_REG_MM0 QC_X86_REG_MM0
+#define UC_X86_REG_MM1 QC_X86_REG_MM1
+#define UC_X86_REG_MM2 QC_X86_REG_MM2
+#define UC_X86_REG_MM3 QC_X86_REG_MM3
+#define UC_X86_REG_MM4 QC_X86_REG_MM4
+#define UC_X86_REG_MM5 QC_X86_REG_MM5
+#define UC_X86_REG_MM6 QC_X86_REG_MM6
+#define UC_X86_REG_MM7 QC_X86_REG_MM7
+#define UC_X86_REG_R8 QC_X86_REG_R8
+#define UC_X86_REG_R9 QC_X86_REG_R9
+#define UC_X86_REG_R10 QC_X86_REG_R10
+#define UC_X86_REG_R11 QC_X86_REG_R11
+#define UC_X86_REG_R12 QC_X86_REG_R12
+#define UC_X86_REG_R13 QC_X86_REG_R13
+#define UC_X86_REG_R14 QC_X86_REG_R14
+#define UC_X86_REG_R15 QC_X86_REG_R15
+#define UC_X86_REG_ST0 QC_X86_REG_ST0
+#define UC_X86_REG_ST1 QC_X86_REG_ST1
+#define UC_X86_REG_ST2 QC_X86_REG_ST2
+#define UC_X86_REG_ST3 QC_X86_REG_ST3
+#define UC_X86_REG_ST4 QC_X86_REG_ST4
+#define UC_X86_REG_ST5 QC_X86_REG_ST5
+#define UC_X86_REG_ST6 QC_X86_REG_ST6
+#define UC_X86_REG_ST7 QC_X86_REG_ST7
+#define UC_X86_REG_XMM0 QC_X86_REG_XMM0
+#define UC_X86_REG_XMM1 QC_X86_REG_XMM1
+#define UC_X86_REG_XMM2 QC_X86_REG_XMM2
+#define UC_X86_REG_XMM3 QC_X86_REG_XMM3
+#define UC_X86_REG_XMM4 QC_X86_REG_XMM4
+#define UC_X86_REG_XMM5 QC_X86_REG_XMM5
+#define UC_X86_REG_XMM6 QC_X86_REG_XMM6
+#define UC_X86_REG_XMM7 QC_X86_REG_XMM7
+#define UC_X86_REG_XMM8 QC_X86_REG_XMM8
+#define UC_X86_REG_XMM9 QC_X86_REG_XMM9
+#define UC_X86_REG_XMM10 QC_X86_REG_XMM10
+#define UC_X86_REG_XMM11 QC_X86_REG_XMM11
+#define UC_X86_REG_XMM12 QC_X86_REG_XMM12
+#define UC_X86_REG_XMM13 QC_X86_REG_XMM13
+#define UC_X86_REG_XMM14 QC_X86_REG_XMM14
+#define UC_X86_REG_XMM15 QC_X86_REG_XMM15
+#define UC_X86_REG_XMM16 QC_X86_REG_XMM16
+#define UC_X86_REG_XMM17 QC_X86_REG_XMM17
+#define UC_X86_REG_XMM18 QC_X86_REG_XMM18
+#define UC_X86_REG_XMM19 QC_X86_REG_XMM19
+#define UC_X86_REG_XMM20 QC_X86_REG_XMM20
+#define UC_X86_REG_XMM21 QC_X86_REG_XMM21
+#define UC_X86_REG_XMM22 QC_X86_REG_XMM22
+#define UC_X86_REG_XMM23 QC_X86_REG_XMM23
+#define UC_X86_REG_XMM24 QC_X86_REG_XMM24
+#define UC_X86_REG_XMM25 QC_X86_REG_XMM25
+#define UC_X86_REG_XMM26 QC_X86_REG_XMM26
+#define UC_X86_REG_XMM27 QC_X86_REG_XMM27
+#define UC_X86_REG_XMM28 QC_X86_REG_XMM28
+#define UC_X86_REG_XMM29 QC_X86_REG_XMM29
+#define UC_X86_REG_XMM30 QC_X86_REG_XMM30
+#define UC_X86_REG_XMM31 QC_X86_REG_XMM31
+#define UC_X86_REG_YMM0 QC_X86_REG_YMM0
+#define UC_X86_REG_YMM1 QC_X86_REG_YMM1
+#define UC_X86_REG_YMM2 QC_X86_REG_YMM2
+#define UC_X86_REG_YMM3 QC_X86_REG_YMM3
+#define UC_X86_REG_YMM4 QC_X86_REG_YMM4
+#define UC_X86_REG_YMM5 QC_X86_REG_YMM5
+#define UC_X86_REG_YMM6 QC_X86_REG_YMM6
+#define UC_X86_REG_YMM7 QC_X86_REG_YMM7
+#define UC_X86_REG_YMM8 QC_X86_REG_YMM8
+#define UC_X86_REG_YMM9 QC_X86_REG_YMM9
+#define UC_X86_REG_YMM10 QC_X86_REG_YMM10
+#define UC_X86_REG_YMM11 QC_X86_REG_YMM11
+#define UC_X86_REG_YMM12 QC_X86_REG_YMM12
+#define UC_X86_REG_YMM13 QC_X86_REG_YMM13
+#define UC_X86_REG_YMM14 QC_X86_REG_YMM14
+#define UC_X86_REG_YMM15 QC_X86_REG_YMM15
+#define UC_X86_REG_YMM16 QC_X86_REG_YMM16
+#define UC_X86_REG_YMM17 QC_X86_REG_YMM17
+#define UC_X86_REG_YMM18 QC_X86_REG_YMM18
+#define UC_X86_REG_YMM19 QC_X86_REG_YMM19
+#define UC_X86_REG_YMM20 QC_X86_REG_YMM20
+#define UC_X86_REG_YMM21 QC_X86_REG_YMM21
+#define UC_X86_REG_YMM22 QC_X86_REG_YMM22
+#define UC_X86_REG_YMM23 QC_X86_REG_YMM23
+#define UC_X86_REG_YMM24 QC_X86_REG_YMM24
+#define UC_X86_REG_YMM25 QC_X86_REG_YMM25
+#define UC_X86_REG_YMM26 QC_X86_REG_YMM26
+#define UC_X86_REG_YMM27 QC_X86_REG_YMM27
+#define UC_X86_REG_YMM28 QC_X86_REG_YMM28
+#define UC_X86_REG_YMM29 QC_X86_REG_YMM29
+#define UC_X86_REG_YMM30 QC_X86_REG_YMM30
+#define UC_X86_REG_YMM31 QC_X86_REG_YMM31
+#define UC_X86_REG_ZMM0 QC_X86_REG_ZMM0
+#define UC_X86_REG_ZMM1 QC_X86_REG_ZMM1
+#define UC_X86_REG_ZMM2 QC_X86_REG_ZMM2
+#define UC_X86_REG_ZMM3 QC_X86_REG_ZMM3
+#define UC_X86_REG_ZMM4 QC_X86_REG_ZMM4
+#define UC_X86_REG_ZMM5 QC_X86_REG_ZMM5
+#define UC_X86_REG_ZMM6 QC_X86_REG_ZMM6
+#define UC_X86_REG_ZMM7 QC_X86_REG_ZMM7
+#define UC_X86_REG_ZMM8 QC_X86_REG_ZMM8
+#define UC_X86_REG_ZMM9 QC_X86_REG_ZMM9
+#define UC_X86_REG_ZMM10 QC_X86_REG_ZMM10
+#define UC_X86_REG_ZMM11 QC_X86_REG_ZMM11
+#define UC_X86_REG_ZMM12 QC_X86_REG_ZMM12
+#define UC_X86_REG_ZMM13 QC_X86_REG_ZMM13
+#define UC_X86_REG_ZMM14 QC_X86_REG_ZMM14
+#define UC_X86_REG_ZMM15 QC_X86_REG_ZMM15
+#define UC_X86_REG_ZMM16 QC_X86_REG_ZMM16
+#define UC_X86_REG_ZMM17 QC_X86_REG_ZMM17
+#define UC_X86_REG_ZMM18 QC_X86_REG_ZMM18
+#define UC_X86_REG_ZMM19 QC_X86_REG_ZMM19
+#define UC_X86_REG_ZMM20 QC_X86_REG_ZMM20
+#define UC_X86_REG_ZMM21 QC_X86_REG_ZMM21
+#define UC_X86_REG_ZMM22 QC_X86_REG_ZMM22
+#define UC_X86_REG_ZMM23 QC_X86_REG_ZMM23
+#define UC_X86_REG_ZMM24 QC_X86_REG_ZMM24
+#define UC_X86_REG_ZMM25 QC_X86_REG_ZMM25
+#define UC_X86_REG_ZMM26 QC_X86_REG_ZMM26
+#define UC_X86_REG_ZMM27 QC_X86_REG_ZMM27
+#define UC_X86_REG_ZMM28 QC_X86_REG_ZMM28
+#define UC_X86_REG_ZMM29 QC_X86_REG_ZMM29
+#define UC_X86_REG_ZMM30 QC_X86_REG_ZMM30
+#define UC_X86_REG_ZMM31 QC_X86_REG_ZMM31
+#define UC_X86_REG_R8B QC_X86_REG_R8B
+#define UC_X86_REG_R9B QC_X86_REG_R9B
+#define UC_X86_REG_R10B QC_X86_REG_R10B
+#define UC_X86_REG_R11B QC_X86_REG_R11B
+#define UC_X86_REG_R12B QC_X86_REG_R12B
+#define UC_X86_REG_R13B QC_X86_REG_R13B
+#define UC_X86_REG_R14B QC_X86_REG_R14B
+#define UC_X86_REG_R15B QC_X86_REG_R15B
+#define UC_X86_REG_R8D QC_X86_REG_R8D
+#define UC_X86_REG_R9D QC_X86_REG_R9D
+#define UC_X86_REG_R10D QC_X86_REG_R10D
+#define UC_X86_REG_R11D QC_X86_REG_R11D
+#define UC_X86_REG_R12D QC_X86_REG_R12D
+#define UC_X86_REG_R13D QC_X86_REG_R13D
+#define UC_X86_REG_R14D QC_X86_REG_R14D
+#define UC_X86_REG_R15D QC_X86_REG_R15D
+#define UC_X86_REG_R8W QC_X86_REG_R8W
+#define UC_X86_REG_R9W QC_X86_REG_R9W
+#define UC_X86_REG_R10W QC_X86_REG_R10W
+#define UC_X86_REG_R11W QC_X86_REG_R11W
+#define UC_X86_REG_R12W QC_X86_REG_R12W
+#define UC_X86_REG_R13W QC_X86_REG_R13W
+#define UC_X86_REG_R14W QC_X86_REG_R14W
+#define UC_X86_REG_R15W QC_X86_REG_R15W
+#define UC_X86_REG_IDTR QC_X86_REG_IDTR
+#define UC_X86_REG_GDTR QC_X86_REG_GDTR
+#define UC_X86_REG_LDTR QC_X86_REG_LDTR
+#define UC_X86_REG_TR QC_X86_REG_TR
+#define UC_X86_REG_FPCW QC_X86_REG_FPCW
+#define UC_X86_REG_FPTAG QC_X86_REG_FPTAG
+#define UC_X86_REG_MSR QC_X86_REG_MSR
+#define UC_X86_REG_MXCSR QC_X86_REG_MXCSR
+#define UC_X86_REG_FS_BASE QC_X86_REG_FS_BASE
+#define UC_X86_REG_GS_BASE QC_X86_REG_GS_BASE
+#define UC_X86_REG_FLAGS QC_X86_REG_FLAGS
+#define UC_X86_REG_RFLAGS QC_X86_REG_RFLAGS
+#define UC_X86_REG_ENDING QC_X86_REG_ENDING
+#define UC_X86_INS_INVALID QC_X86_INS_INVALID
+#define UC_X86_INS_AAA QC_X86_INS_AAA
+#define UC_X86_INS_AAD QC_X86_INS_AAD
+#define UC_X86_INS_AAM QC_X86_INS_AAM
+#define UC_X86_INS_AAS QC_X86_INS_AAS
+#define UC_X86_INS_FABS QC_X86_INS_FABS
+#define UC_X86_INS_ADC QC_X86_INS_ADC
+#define UC_X86_INS_ADCX QC_X86_INS_ADCX
+#define UC_X86_INS_ADD QC_X86_INS_ADD
+#define UC_X86_INS_ADDPD QC_X86_INS_ADDPD
+#define UC_X86_INS_ADDPS QC_X86_INS_ADDPS
+#define UC_X86_INS_ADDSD QC_X86_INS_ADDSD
+#define UC_X86_INS_ADDSS QC_X86_INS_ADDSS
+#define UC_X86_INS_ADDSUBPD QC_X86_INS_ADDSUBPD
+#define UC_X86_INS_ADDSUBPS QC_X86_INS_ADDSUBPS
+#define UC_X86_INS_FADD QC_X86_INS_FADD
+#define UC_X86_INS_FIADD QC_X86_INS_FIADD
+#define UC_X86_INS_FADDP QC_X86_INS_FADDP
+#define UC_X86_INS_ADOX QC_X86_INS_ADOX
+#define UC_X86_INS_AESDECLAST QC_X86_INS_AESDECLAST
+#define UC_X86_INS_AESDEC QC_X86_INS_AESDEC
+#define UC_X86_INS_AESENCLAST QC_X86_INS_AESENCLAST
+#define UC_X86_INS_AESENC QC_X86_INS_AESENC
+#define UC_X86_INS_AESIMC QC_X86_INS_AESIMC
+#define UC_X86_INS_AESKEYGENASSIST QC_X86_INS_AESKEYGENASSIST
+#define UC_X86_INS_AND QC_X86_INS_AND
+#define UC_X86_INS_ANDN QC_X86_INS_ANDN
+#define UC_X86_INS_ANDNPD QC_X86_INS_ANDNPD
+#define UC_X86_INS_ANDNPS QC_X86_INS_ANDNPS
+#define UC_X86_INS_ANDPD QC_X86_INS_ANDPD
+#define UC_X86_INS_ANDPS QC_X86_INS_ANDPS
+#define UC_X86_INS_ARPL QC_X86_INS_ARPL
+#define UC_X86_INS_BEXTR QC_X86_INS_BEXTR
+#define UC_X86_INS_BLCFILL QC_X86_INS_BLCFILL
+#define UC_X86_INS_BLCI QC_X86_INS_BLCI
+#define UC_X86_INS_BLCIC QC_X86_INS_BLCIC
+#define UC_X86_INS_BLCMSK QC_X86_INS_BLCMSK
+#define UC_X86_INS_BLCS QC_X86_INS_BLCS
+#define UC_X86_INS_BLENDPD QC_X86_INS_BLENDPD
+#define UC_X86_INS_BLENDPS QC_X86_INS_BLENDPS
+#define UC_X86_INS_BLENDVPD QC_X86_INS_BLENDVPD
+#define UC_X86_INS_BLENDVPS QC_X86_INS_BLENDVPS
+#define UC_X86_INS_BLSFILL QC_X86_INS_BLSFILL
+#define UC_X86_INS_BLSI QC_X86_INS_BLSI
+#define UC_X86_INS_BLSIC QC_X86_INS_BLSIC
+#define UC_X86_INS_BLSMSK QC_X86_INS_BLSMSK
+#define UC_X86_INS_BLSR QC_X86_INS_BLSR
+#define UC_X86_INS_BOUND QC_X86_INS_BOUND
+#define UC_X86_INS_BSF QC_X86_INS_BSF
+#define UC_X86_INS_BSR QC_X86_INS_BSR
+#define UC_X86_INS_BSWAP QC_X86_INS_BSWAP
+#define UC_X86_INS_BT QC_X86_INS_BT
+#define UC_X86_INS_BTC QC_X86_INS_BTC
+#define UC_X86_INS_BTR QC_X86_INS_BTR
+#define UC_X86_INS_BTS QC_X86_INS_BTS
+#define UC_X86_INS_BZHI QC_X86_INS_BZHI
+#define UC_X86_INS_CALL QC_X86_INS_CALL
+#define UC_X86_INS_CBW QC_X86_INS_CBW
+#define UC_X86_INS_CDQ QC_X86_INS_CDQ
+#define UC_X86_INS_CDQE QC_X86_INS_CDQE
+#define UC_X86_INS_FCHS QC_X86_INS_FCHS
+#define UC_X86_INS_CLAC QC_X86_INS_CLAC
+#define UC_X86_INS_CLC QC_X86_INS_CLC
+#define UC_X86_INS_CLD QC_X86_INS_CLD
+#define UC_X86_INS_CLFLUSH QC_X86_INS_CLFLUSH
+#define UC_X86_INS_CLFLUSHOPT QC_X86_INS_CLFLUSHOPT
+#define UC_X86_INS_CLGI QC_X86_INS_CLGI
+#define UC_X86_INS_CLI QC_X86_INS_CLI
+#define UC_X86_INS_CLTS QC_X86_INS_CLTS
+#define UC_X86_INS_CLWB QC_X86_INS_CLWB
+#define UC_X86_INS_CMC QC_X86_INS_CMC
+#define UC_X86_INS_CMOVA QC_X86_INS_CMOVA
+#define UC_X86_INS_CMOVAE QC_X86_INS_CMOVAE
+#define UC_X86_INS_CMOVB QC_X86_INS_CMOVB
+#define UC_X86_INS_CMOVBE QC_X86_INS_CMOVBE
+#define UC_X86_INS_FCMOVBE QC_X86_INS_FCMOVBE
+#define UC_X86_INS_FCMOVB QC_X86_INS_FCMOVB
+#define UC_X86_INS_CMOVE QC_X86_INS_CMOVE
+#define UC_X86_INS_FCMOVE QC_X86_INS_FCMOVE
+#define UC_X86_INS_CMOVG QC_X86_INS_CMOVG
+#define UC_X86_INS_CMOVGE QC_X86_INS_CMOVGE
+#define UC_X86_INS_CMOVL QC_X86_INS_CMOVL
+#define UC_X86_INS_CMOVLE QC_X86_INS_CMOVLE
+#define UC_X86_INS_FCMOVNBE QC_X86_INS_FCMOVNBE
+#define UC_X86_INS_FCMOVNB QC_X86_INS_FCMOVNB
+#define UC_X86_INS_CMOVNE QC_X86_INS_CMOVNE
+#define UC_X86_INS_FCMOVNE QC_X86_INS_FCMOVNE
+#define UC_X86_INS_CMOVNO QC_X86_INS_CMOVNO
+#define UC_X86_INS_CMOVNP QC_X86_INS_CMOVNP
+#define UC_X86_INS_FCMOVNU QC_X86_INS_FCMOVNU
+#define UC_X86_INS_CMOVNS QC_X86_INS_CMOVNS
+#define UC_X86_INS_CMOVO QC_X86_INS_CMOVO
+#define UC_X86_INS_CMOVP QC_X86_INS_CMOVP
+#define UC_X86_INS_FCMOVU QC_X86_INS_FCMOVU
+#define UC_X86_INS_CMOVS QC_X86_INS_CMOVS
+#define UC_X86_INS_CMP QC_X86_INS_CMP
+#define UC_X86_INS_CMPPD QC_X86_INS_CMPPD
+#define UC_X86_INS_CMPPS QC_X86_INS_CMPPS
+#define UC_X86_INS_CMPSB QC_X86_INS_CMPSB
+#define UC_X86_INS_CMPSD QC_X86_INS_CMPSD
+#define UC_X86_INS_CMPSQ QC_X86_INS_CMPSQ
+#define UC_X86_INS_CMPSS QC_X86_INS_CMPSS
+#define UC_X86_INS_CMPSW QC_X86_INS_CMPSW
+#define UC_X86_INS_CMPXCHG16B QC_X86_INS_CMPXCHG16B
+#define UC_X86_INS_CMPXCHG QC_X86_INS_CMPXCHG
+#define UC_X86_INS_CMPXCHG8B QC_X86_INS_CMPXCHG8B
+#define UC_X86_INS_COMISD QC_X86_INS_COMISD
+#define UC_X86_INS_COMISS QC_X86_INS_COMISS
+#define UC_X86_INS_FCOMP QC_X86_INS_FCOMP
+#define UC_X86_INS_FCOMPI QC_X86_INS_FCOMPI
+#define UC_X86_INS_FCOMI QC_X86_INS_FCOMI
+#define UC_X86_INS_FCOM QC_X86_INS_FCOM
+#define UC_X86_INS_FCOS QC_X86_INS_FCOS
+#define UC_X86_INS_CPUID QC_X86_INS_CPUID
+#define UC_X86_INS_CQO QC_X86_INS_CQO
+#define UC_X86_INS_CRC32 QC_X86_INS_CRC32
+#define UC_X86_INS_CVTDQ2PD QC_X86_INS_CVTDQ2PD
+#define UC_X86_INS_CVTDQ2PS QC_X86_INS_CVTDQ2PS
+#define UC_X86_INS_CVTPD2DQ QC_X86_INS_CVTPD2DQ
+#define UC_X86_INS_CVTPD2PS QC_X86_INS_CVTPD2PS
+#define UC_X86_INS_CVTPS2DQ QC_X86_INS_CVTPS2DQ
+#define UC_X86_INS_CVTPS2PD QC_X86_INS_CVTPS2PD
+#define UC_X86_INS_CVTSD2SI QC_X86_INS_CVTSD2SI
+#define UC_X86_INS_CVTSD2SS QC_X86_INS_CVTSD2SS
+#define UC_X86_INS_CVTSI2SD QC_X86_INS_CVTSI2SD
+#define UC_X86_INS_CVTSI2SS QC_X86_INS_CVTSI2SS
+#define UC_X86_INS_CVTSS2SD QC_X86_INS_CVTSS2SD
+#define UC_X86_INS_CVTSS2SI QC_X86_INS_CVTSS2SI
+#define UC_X86_INS_CVTTPD2DQ QC_X86_INS_CVTTPD2DQ
+#define UC_X86_INS_CVTTPS2DQ QC_X86_INS_CVTTPS2DQ
+#define UC_X86_INS_CVTTSD2SI QC_X86_INS_CVTTSD2SI
+#define UC_X86_INS_CVTTSS2SI QC_X86_INS_CVTTSS2SI
+#define UC_X86_INS_CWD QC_X86_INS_CWD
+#define UC_X86_INS_CWDE QC_X86_INS_CWDE
+#define UC_X86_INS_DAA QC_X86_INS_DAA
+#define UC_X86_INS_DAS QC_X86_INS_DAS
+#define UC_X86_INS_DATA16 QC_X86_INS_DATA16
+#define UC_X86_INS_DEC QC_X86_INS_DEC
+#define UC_X86_INS_DIV QC_X86_INS_DIV
+#define UC_X86_INS_DIVPD QC_X86_INS_DIVPD
+#define UC_X86_INS_DIVPS QC_X86_INS_DIVPS
+#define UC_X86_INS_FDIVR QC_X86_INS_FDIVR
+#define UC_X86_INS_FIDIVR QC_X86_INS_FIDIVR
+#define UC_X86_INS_FDIVRP QC_X86_INS_FDIVRP
+#define UC_X86_INS_DIVSD QC_X86_INS_DIVSD
+#define UC_X86_INS_DIVSS QC_X86_INS_DIVSS
+#define UC_X86_INS_FDIV QC_X86_INS_FDIV
+#define UC_X86_INS_FIDIV QC_X86_INS_FIDIV
+#define UC_X86_INS_FDIVP QC_X86_INS_FDIVP
+#define UC_X86_INS_DPPD QC_X86_INS_DPPD
+#define UC_X86_INS_DPPS QC_X86_INS_DPPS
+#define UC_X86_INS_RET QC_X86_INS_RET
+#define UC_X86_INS_ENCLS QC_X86_INS_ENCLS
+#define UC_X86_INS_ENCLU QC_X86_INS_ENCLU
+#define UC_X86_INS_ENTER QC_X86_INS_ENTER
+#define UC_X86_INS_EXTRACTPS QC_X86_INS_EXTRACTPS
+#define UC_X86_INS_EXTRQ QC_X86_INS_EXTRQ
+#define UC_X86_INS_F2XM1 QC_X86_INS_F2XM1
+#define UC_X86_INS_LCALL QC_X86_INS_LCALL
+#define UC_X86_INS_LJMP QC_X86_INS_LJMP
+#define UC_X86_INS_FBLD QC_X86_INS_FBLD
+#define UC_X86_INS_FBSTP QC_X86_INS_FBSTP
+#define UC_X86_INS_FCOMPP QC_X86_INS_FCOMPP
+#define UC_X86_INS_FDECSTP QC_X86_INS_FDECSTP
+#define UC_X86_INS_FEMMS QC_X86_INS_FEMMS
+#define UC_X86_INS_FFREE QC_X86_INS_FFREE
+#define UC_X86_INS_FICOM QC_X86_INS_FICOM
+#define UC_X86_INS_FICOMP QC_X86_INS_FICOMP
+#define UC_X86_INS_FINCSTP QC_X86_INS_FINCSTP
+#define UC_X86_INS_FLDCW QC_X86_INS_FLDCW
+#define UC_X86_INS_FLDENV QC_X86_INS_FLDENV
+#define UC_X86_INS_FLDL2E QC_X86_INS_FLDL2E
+#define UC_X86_INS_FLDL2T QC_X86_INS_FLDL2T
+#define UC_X86_INS_FLDLG2 QC_X86_INS_FLDLG2
+#define UC_X86_INS_FLDLN2 QC_X86_INS_FLDLN2
+#define UC_X86_INS_FLDPI QC_X86_INS_FLDPI
+#define UC_X86_INS_FNCLEX QC_X86_INS_FNCLEX
+#define UC_X86_INS_FNINIT QC_X86_INS_FNINIT
+#define UC_X86_INS_FNOP QC_X86_INS_FNOP
+#define UC_X86_INS_FNSTCW QC_X86_INS_FNSTCW
+#define UC_X86_INS_FNSTSW QC_X86_INS_FNSTSW
+#define UC_X86_INS_FPATAN QC_X86_INS_FPATAN
+#define UC_X86_INS_FPREM QC_X86_INS_FPREM
+#define UC_X86_INS_FPREM1 QC_X86_INS_FPREM1
+#define UC_X86_INS_FPTAN QC_X86_INS_FPTAN
+#define UC_X86_INS_FFREEP QC_X86_INS_FFREEP
+#define UC_X86_INS_FRNDINT QC_X86_INS_FRNDINT
+#define UC_X86_INS_FRSTOR QC_X86_INS_FRSTOR
+#define UC_X86_INS_FNSAVE QC_X86_INS_FNSAVE
+#define UC_X86_INS_FSCALE QC_X86_INS_FSCALE
+#define UC_X86_INS_FSETPM QC_X86_INS_FSETPM
+#define UC_X86_INS_FSINCOS QC_X86_INS_FSINCOS
+#define UC_X86_INS_FNSTENV QC_X86_INS_FNSTENV
+#define UC_X86_INS_FXAM QC_X86_INS_FXAM
+#define UC_X86_INS_FXRSTOR QC_X86_INS_FXRSTOR
+#define UC_X86_INS_FXRSTOR64 QC_X86_INS_FXRSTOR64
+#define UC_X86_INS_FXSAVE QC_X86_INS_FXSAVE
+#define UC_X86_INS_FXSAVE64 QC_X86_INS_FXSAVE64
+#define UC_X86_INS_FXTRACT QC_X86_INS_FXTRACT
+#define UC_X86_INS_FYL2X QC_X86_INS_FYL2X
+#define UC_X86_INS_FYL2XP1 QC_X86_INS_FYL2XP1
+#define UC_X86_INS_MOVAPD QC_X86_INS_MOVAPD
+#define UC_X86_INS_MOVAPS QC_X86_INS_MOVAPS
+#define UC_X86_INS_ORPD QC_X86_INS_ORPD
+#define UC_X86_INS_ORPS QC_X86_INS_ORPS
+#define UC_X86_INS_VMOVAPD QC_X86_INS_VMOVAPD
+#define UC_X86_INS_VMOVAPS QC_X86_INS_VMOVAPS
+#define UC_X86_INS_XORPD QC_X86_INS_XORPD
+#define UC_X86_INS_XORPS QC_X86_INS_XORPS
+#define UC_X86_INS_GETSEC QC_X86_INS_GETSEC
+#define UC_X86_INS_HADDPD QC_X86_INS_HADDPD
+#define UC_X86_INS_HADDPS QC_X86_INS_HADDPS
+#define UC_X86_INS_HLT QC_X86_INS_HLT
+#define UC_X86_INS_HSUBPD QC_X86_INS_HSUBPD
+#define UC_X86_INS_HSUBPS QC_X86_INS_HSUBPS
+#define UC_X86_INS_IDIV QC_X86_INS_IDIV
+#define UC_X86_INS_FILD QC_X86_INS_FILD
+#define UC_X86_INS_IMUL QC_X86_INS_IMUL
+#define UC_X86_INS_IN QC_X86_INS_IN
+#define UC_X86_INS_INC QC_X86_INS_INC
+#define UC_X86_INS_INSB QC_X86_INS_INSB
+#define UC_X86_INS_INSERTPS QC_X86_INS_INSERTPS
+#define UC_X86_INS_INSERTQ QC_X86_INS_INSERTQ
+#define UC_X86_INS_INSD QC_X86_INS_INSD
+#define UC_X86_INS_INSW QC_X86_INS_INSW
+#define UC_X86_INS_INT QC_X86_INS_INT
+#define UC_X86_INS_INT1 QC_X86_INS_INT1
+#define UC_X86_INS_INT3 QC_X86_INS_INT3
+#define UC_X86_INS_INTO QC_X86_INS_INTO
+#define UC_X86_INS_INVD QC_X86_INS_INVD
+#define UC_X86_INS_INVEPT QC_X86_INS_INVEPT
+#define UC_X86_INS_INVLPG QC_X86_INS_INVLPG
+#define UC_X86_INS_INVLPGA QC_X86_INS_INVLPGA
+#define UC_X86_INS_INVPCID QC_X86_INS_INVPCID
+#define UC_X86_INS_INVVPID QC_X86_INS_INVVPID
+#define UC_X86_INS_IRET QC_X86_INS_IRET
+#define UC_X86_INS_IRETD QC_X86_INS_IRETD
+#define UC_X86_INS_IRETQ QC_X86_INS_IRETQ
+#define UC_X86_INS_FISTTP QC_X86_INS_FISTTP
+#define UC_X86_INS_FIST QC_X86_INS_FIST
+#define UC_X86_INS_FISTP QC_X86_INS_FISTP
+#define UC_X86_INS_UCOMISD QC_X86_INS_UCOMISD
+#define UC_X86_INS_UCOMISS QC_X86_INS_UCOMISS
+#define UC_X86_INS_VCOMISD QC_X86_INS_VCOMISD
+#define UC_X86_INS_VCOMISS QC_X86_INS_VCOMISS
+#define UC_X86_INS_VCVTSD2SS QC_X86_INS_VCVTSD2SS
+#define UC_X86_INS_VCVTSI2SD QC_X86_INS_VCVTSI2SD
+#define UC_X86_INS_VCVTSI2SS QC_X86_INS_VCVTSI2SS
+#define UC_X86_INS_VCVTSS2SD QC_X86_INS_VCVTSS2SD
+#define UC_X86_INS_VCVTTSD2SI QC_X86_INS_VCVTTSD2SI
+#define UC_X86_INS_VCVTTSD2USI QC_X86_INS_VCVTTSD2USI
+#define UC_X86_INS_VCVTTSS2SI QC_X86_INS_VCVTTSS2SI
+#define UC_X86_INS_VCVTTSS2USI QC_X86_INS_VCVTTSS2USI
+#define UC_X86_INS_VCVTUSI2SD QC_X86_INS_VCVTUSI2SD
+#define UC_X86_INS_VCVTUSI2SS QC_X86_INS_VCVTUSI2SS
+#define UC_X86_INS_VUCOMISD QC_X86_INS_VUCOMISD
+#define UC_X86_INS_VUCOMISS QC_X86_INS_VUCOMISS
+#define UC_X86_INS_JAE QC_X86_INS_JAE
+#define UC_X86_INS_JA QC_X86_INS_JA
+#define UC_X86_INS_JBE QC_X86_INS_JBE
+#define UC_X86_INS_JB QC_X86_INS_JB
+#define UC_X86_INS_JCXZ QC_X86_INS_JCXZ
+#define UC_X86_INS_JECXZ QC_X86_INS_JECXZ
+#define UC_X86_INS_JE QC_X86_INS_JE
+#define UC_X86_INS_JGE QC_X86_INS_JGE
+#define UC_X86_INS_JG QC_X86_INS_JG
+#define UC_X86_INS_JLE QC_X86_INS_JLE
+#define UC_X86_INS_JL QC_X86_INS_JL
+#define UC_X86_INS_JMP QC_X86_INS_JMP
+#define UC_X86_INS_JNE QC_X86_INS_JNE
+#define UC_X86_INS_JNO QC_X86_INS_JNO
+#define UC_X86_INS_JNP QC_X86_INS_JNP
+#define UC_X86_INS_JNS QC_X86_INS_JNS
+#define UC_X86_INS_JO QC_X86_INS_JO
+#define UC_X86_INS_JP QC_X86_INS_JP
+#define UC_X86_INS_JRCXZ QC_X86_INS_JRCXZ
+#define UC_X86_INS_JS QC_X86_INS_JS
+#define UC_X86_INS_KANDB QC_X86_INS_KANDB
+#define UC_X86_INS_KANDD QC_X86_INS_KANDD
+#define UC_X86_INS_KANDNB QC_X86_INS_KANDNB
+#define UC_X86_INS_KANDND QC_X86_INS_KANDND
+#define UC_X86_INS_KANDNQ QC_X86_INS_KANDNQ
+#define UC_X86_INS_KANDNW QC_X86_INS_KANDNW
+#define UC_X86_INS_KANDQ QC_X86_INS_KANDQ
+#define UC_X86_INS_KANDW QC_X86_INS_KANDW
+#define UC_X86_INS_KMOVB QC_X86_INS_KMOVB
+#define UC_X86_INS_KMOVD QC_X86_INS_KMOVD
+#define UC_X86_INS_KMOVQ QC_X86_INS_KMOVQ
+#define UC_X86_INS_KMOVW QC_X86_INS_KMOVW
+#define UC_X86_INS_KNOTB QC_X86_INS_KNOTB
+#define UC_X86_INS_KNOTD QC_X86_INS_KNOTD
+#define UC_X86_INS_KNOTQ QC_X86_INS_KNOTQ
+#define UC_X86_INS_KNOTW QC_X86_INS_KNOTW
+#define UC_X86_INS_KORB QC_X86_INS_KORB
+#define UC_X86_INS_KORD QC_X86_INS_KORD
+#define UC_X86_INS_KORQ QC_X86_INS_KORQ
+#define UC_X86_INS_KORTESTB QC_X86_INS_KORTESTB
+#define UC_X86_INS_KORTESTD QC_X86_INS_KORTESTD
+#define UC_X86_INS_KORTESTQ QC_X86_INS_KORTESTQ
+#define UC_X86_INS_KORTESTW QC_X86_INS_KORTESTW
+#define UC_X86_INS_KORW QC_X86_INS_KORW
+#define UC_X86_INS_KSHIFTLB QC_X86_INS_KSHIFTLB
+#define UC_X86_INS_KSHIFTLD QC_X86_INS_KSHIFTLD
+#define UC_X86_INS_KSHIFTLQ QC_X86_INS_KSHIFTLQ
+#define UC_X86_INS_KSHIFTLW QC_X86_INS_KSHIFTLW
+#define UC_X86_INS_KSHIFTRB QC_X86_INS_KSHIFTRB
+#define UC_X86_INS_KSHIFTRD QC_X86_INS_KSHIFTRD
+#define UC_X86_INS_KSHIFTRQ QC_X86_INS_KSHIFTRQ
+#define UC_X86_INS_KSHIFTRW QC_X86_INS_KSHIFTRW
+#define UC_X86_INS_KUNPCKBW QC_X86_INS_KUNPCKBW
+#define UC_X86_INS_KXNORB QC_X86_INS_KXNORB
+#define UC_X86_INS_KXNORD QC_X86_INS_KXNORD
+#define UC_X86_INS_KXNORQ QC_X86_INS_KXNORQ
+#define UC_X86_INS_KXNORW QC_X86_INS_KXNORW
+#define UC_X86_INS_KXORB QC_X86_INS_KXORB
+#define UC_X86_INS_KXORD QC_X86_INS_KXORD
+#define UC_X86_INS_KXORQ QC_X86_INS_KXORQ
+#define UC_X86_INS_KXORW QC_X86_INS_KXORW
+#define UC_X86_INS_LAHF QC_X86_INS_LAHF
+#define UC_X86_INS_LAR QC_X86_INS_LAR
+#define UC_X86_INS_LDDQU QC_X86_INS_LDDQU
+#define UC_X86_INS_LDMXCSR QC_X86_INS_LDMXCSR
+#define UC_X86_INS_LDS QC_X86_INS_LDS
+#define UC_X86_INS_FLDZ QC_X86_INS_FLDZ
+#define UC_X86_INS_FLD1 QC_X86_INS_FLD1
+#define UC_X86_INS_FLD QC_X86_INS_FLD
+#define UC_X86_INS_LEA QC_X86_INS_LEA
+#define UC_X86_INS_LEAVE QC_X86_INS_LEAVE
+#define UC_X86_INS_LES QC_X86_INS_LES
+#define UC_X86_INS_LFENCE QC_X86_INS_LFENCE
+#define UC_X86_INS_LFS QC_X86_INS_LFS
+#define UC_X86_INS_LGDT QC_X86_INS_LGDT
+#define UC_X86_INS_LGS QC_X86_INS_LGS
+#define UC_X86_INS_LIDT QC_X86_INS_LIDT
+#define UC_X86_INS_LLDT QC_X86_INS_LLDT
+#define UC_X86_INS_LMSW QC_X86_INS_LMSW
+#define UC_X86_INS_OR QC_X86_INS_OR
+#define UC_X86_INS_SUB QC_X86_INS_SUB
+#define UC_X86_INS_XOR QC_X86_INS_XOR
+#define UC_X86_INS_LODSB QC_X86_INS_LODSB
+#define UC_X86_INS_LODSD QC_X86_INS_LODSD
+#define UC_X86_INS_LODSQ QC_X86_INS_LODSQ
+#define UC_X86_INS_LODSW QC_X86_INS_LODSW
+#define UC_X86_INS_LOOP QC_X86_INS_LOOP
+#define UC_X86_INS_LOOPE QC_X86_INS_LOOPE
+#define UC_X86_INS_LOOPNE QC_X86_INS_LOOPNE
+#define UC_X86_INS_RETF QC_X86_INS_RETF
+#define UC_X86_INS_RETFQ QC_X86_INS_RETFQ
+#define UC_X86_INS_LSL QC_X86_INS_LSL
+#define UC_X86_INS_LSS QC_X86_INS_LSS
+#define UC_X86_INS_LTR QC_X86_INS_LTR
+#define UC_X86_INS_XADD QC_X86_INS_XADD
+#define UC_X86_INS_LZCNT QC_X86_INS_LZCNT
+#define UC_X86_INS_MASKMOVDQU QC_X86_INS_MASKMOVDQU
+#define UC_X86_INS_MAXPD QC_X86_INS_MAXPD
+#define UC_X86_INS_MAXPS QC_X86_INS_MAXPS
+#define UC_X86_INS_MAXSD QC_X86_INS_MAXSD
+#define UC_X86_INS_MAXSS QC_X86_INS_MAXSS
+#define UC_X86_INS_MFENCE QC_X86_INS_MFENCE
+#define UC_X86_INS_MINPD QC_X86_INS_MINPD
+#define UC_X86_INS_MINPS QC_X86_INS_MINPS
+#define UC_X86_INS_MINSD QC_X86_INS_MINSD
+#define UC_X86_INS_MINSS QC_X86_INS_MINSS
+#define UC_X86_INS_CVTPD2PI QC_X86_INS_CVTPD2PI
+#define UC_X86_INS_CVTPI2PD QC_X86_INS_CVTPI2PD
+#define UC_X86_INS_CVTPI2PS QC_X86_INS_CVTPI2PS
+#define UC_X86_INS_CVTPS2PI QC_X86_INS_CVTPS2PI
+#define UC_X86_INS_CVTTPD2PI QC_X86_INS_CVTTPD2PI
+#define UC_X86_INS_CVTTPS2PI QC_X86_INS_CVTTPS2PI
+#define UC_X86_INS_EMMS QC_X86_INS_EMMS
+#define UC_X86_INS_MASKMOVQ QC_X86_INS_MASKMOVQ
+#define UC_X86_INS_MOVD QC_X86_INS_MOVD
+#define UC_X86_INS_MOVDQ2Q QC_X86_INS_MOVDQ2Q
+#define UC_X86_INS_MOVNTQ QC_X86_INS_MOVNTQ
+#define UC_X86_INS_MOVQ2DQ QC_X86_INS_MOVQ2DQ
+#define UC_X86_INS_MOVQ QC_X86_INS_MOVQ
+#define UC_X86_INS_PABSB QC_X86_INS_PABSB
+#define UC_X86_INS_PABSD QC_X86_INS_PABSD
+#define UC_X86_INS_PABSW QC_X86_INS_PABSW
+#define UC_X86_INS_PACKSSDW QC_X86_INS_PACKSSDW
+#define UC_X86_INS_PACKSSWB QC_X86_INS_PACKSSWB
+#define UC_X86_INS_PACKUSWB QC_X86_INS_PACKUSWB
+#define UC_X86_INS_PADDB QC_X86_INS_PADDB
+#define UC_X86_INS_PADDD QC_X86_INS_PADDD
+#define UC_X86_INS_PADDQ QC_X86_INS_PADDQ
+#define UC_X86_INS_PADDSB QC_X86_INS_PADDSB
+#define UC_X86_INS_PADDSW QC_X86_INS_PADDSW
+#define UC_X86_INS_PADDUSB QC_X86_INS_PADDUSB
+#define UC_X86_INS_PADDUSW QC_X86_INS_PADDUSW
+#define UC_X86_INS_PADDW QC_X86_INS_PADDW
+#define UC_X86_INS_PALIGNR QC_X86_INS_PALIGNR
+#define UC_X86_INS_PANDN QC_X86_INS_PANDN
+#define UC_X86_INS_PAND QC_X86_INS_PAND
+#define UC_X86_INS_PAVGB QC_X86_INS_PAVGB
+#define UC_X86_INS_PAVGW QC_X86_INS_PAVGW
+#define UC_X86_INS_PCMPEQB QC_X86_INS_PCMPEQB
+#define UC_X86_INS_PCMPEQD QC_X86_INS_PCMPEQD
+#define UC_X86_INS_PCMPEQW QC_X86_INS_PCMPEQW
+#define UC_X86_INS_PCMPGTB QC_X86_INS_PCMPGTB
+#define UC_X86_INS_PCMPGTD QC_X86_INS_PCMPGTD
+#define UC_X86_INS_PCMPGTW QC_X86_INS_PCMPGTW
+#define UC_X86_INS_PEXTRW QC_X86_INS_PEXTRW
+#define UC_X86_INS_PHADDSW QC_X86_INS_PHADDSW
+#define UC_X86_INS_PHADDW QC_X86_INS_PHADDW
+#define UC_X86_INS_PHADDD QC_X86_INS_PHADDD
+#define UC_X86_INS_PHSUBD QC_X86_INS_PHSUBD
+#define UC_X86_INS_PHSUBSW QC_X86_INS_PHSUBSW
+#define UC_X86_INS_PHSUBW QC_X86_INS_PHSUBW
+#define UC_X86_INS_PINSRW QC_X86_INS_PINSRW
+#define UC_X86_INS_PMADDUBSW QC_X86_INS_PMADDUBSW
+#define UC_X86_INS_PMADDWD QC_X86_INS_PMADDWD
+#define UC_X86_INS_PMAXSW QC_X86_INS_PMAXSW
+#define UC_X86_INS_PMAXUB QC_X86_INS_PMAXUB
+#define UC_X86_INS_PMINSW QC_X86_INS_PMINSW
+#define UC_X86_INS_PMINUB QC_X86_INS_PMINUB
+#define UC_X86_INS_PMOVMSKB QC_X86_INS_PMOVMSKB
+#define UC_X86_INS_PMULHRSW QC_X86_INS_PMULHRSW
+#define UC_X86_INS_PMULHUW QC_X86_INS_PMULHUW
+#define UC_X86_INS_PMULHW QC_X86_INS_PMULHW
+#define UC_X86_INS_PMULLW QC_X86_INS_PMULLW
+#define UC_X86_INS_PMULUDQ QC_X86_INS_PMULUDQ
+#define UC_X86_INS_POR QC_X86_INS_POR
+#define UC_X86_INS_PSADBW QC_X86_INS_PSADBW
+#define UC_X86_INS_PSHUFB QC_X86_INS_PSHUFB
+#define UC_X86_INS_PSHUFW QC_X86_INS_PSHUFW
+#define UC_X86_INS_PSIGNB QC_X86_INS_PSIGNB
+#define UC_X86_INS_PSIGND QC_X86_INS_PSIGND
+#define UC_X86_INS_PSIGNW QC_X86_INS_PSIGNW
+#define UC_X86_INS_PSLLD QC_X86_INS_PSLLD
+#define UC_X86_INS_PSLLQ QC_X86_INS_PSLLQ
+#define UC_X86_INS_PSLLW QC_X86_INS_PSLLW
+#define UC_X86_INS_PSRAD QC_X86_INS_PSRAD
+#define UC_X86_INS_PSRAW QC_X86_INS_PSRAW
+#define UC_X86_INS_PSRLD QC_X86_INS_PSRLD
+#define UC_X86_INS_PSRLQ QC_X86_INS_PSRLQ
+#define UC_X86_INS_PSRLW QC_X86_INS_PSRLW
+#define UC_X86_INS_PSUBB QC_X86_INS_PSUBB
+#define UC_X86_INS_PSUBD QC_X86_INS_PSUBD
+#define UC_X86_INS_PSUBQ QC_X86_INS_PSUBQ
+#define UC_X86_INS_PSUBSB QC_X86_INS_PSUBSB
+#define UC_X86_INS_PSUBSW QC_X86_INS_PSUBSW
+#define UC_X86_INS_PSUBUSB QC_X86_INS_PSUBUSB
+#define UC_X86_INS_PSUBUSW QC_X86_INS_PSUBUSW
+#define UC_X86_INS_PSUBW QC_X86_INS_PSUBW
+#define UC_X86_INS_PUNPCKHBW QC_X86_INS_PUNPCKHBW
+#define UC_X86_INS_PUNPCKHDQ QC_X86_INS_PUNPCKHDQ
+#define UC_X86_INS_PUNPCKHWD QC_X86_INS_PUNPCKHWD
+#define UC_X86_INS_PUNPCKLBW QC_X86_INS_PUNPCKLBW
+#define UC_X86_INS_PUNPCKLDQ QC_X86_INS_PUNPCKLDQ
+#define UC_X86_INS_PUNPCKLWD QC_X86_INS_PUNPCKLWD
+#define UC_X86_INS_PXOR QC_X86_INS_PXOR
+#define UC_X86_INS_MONITOR QC_X86_INS_MONITOR
+#define UC_X86_INS_MONTMUL QC_X86_INS_MONTMUL
+#define UC_X86_INS_MOV QC_X86_INS_MOV
+#define UC_X86_INS_MOVABS QC_X86_INS_MOVABS
+#define UC_X86_INS_MOVBE QC_X86_INS_MOVBE
+#define UC_X86_INS_MOVDDUP QC_X86_INS_MOVDDUP
+#define UC_X86_INS_MOVDQA QC_X86_INS_MOVDQA
+#define UC_X86_INS_MOVDQU QC_X86_INS_MOVDQU
+#define UC_X86_INS_MOVHLPS QC_X86_INS_MOVHLPS
+#define UC_X86_INS_MOVHPD QC_X86_INS_MOVHPD
+#define UC_X86_INS_MOVHPS QC_X86_INS_MOVHPS
+#define UC_X86_INS_MOVLHPS QC_X86_INS_MOVLHPS
+#define UC_X86_INS_MOVLPD QC_X86_INS_MOVLPD
+#define UC_X86_INS_MOVLPS QC_X86_INS_MOVLPS
+#define UC_X86_INS_MOVMSKPD QC_X86_INS_MOVMSKPD
+#define UC_X86_INS_MOVMSKPS QC_X86_INS_MOVMSKPS
+#define UC_X86_INS_MOVNTDQA QC_X86_INS_MOVNTDQA
+#define UC_X86_INS_MOVNTDQ QC_X86_INS_MOVNTDQ
+#define UC_X86_INS_MOVNTI QC_X86_INS_MOVNTI
+#define UC_X86_INS_MOVNTPD QC_X86_INS_MOVNTPD
+#define UC_X86_INS_MOVNTPS QC_X86_INS_MOVNTPS
+#define UC_X86_INS_MOVNTSD QC_X86_INS_MOVNTSD
+#define UC_X86_INS_MOVNTSS QC_X86_INS_MOVNTSS
+#define UC_X86_INS_MOVSB QC_X86_INS_MOVSB
+#define UC_X86_INS_MOVSD QC_X86_INS_MOVSD
+#define UC_X86_INS_MOVSHDUP QC_X86_INS_MOVSHDUP
+#define UC_X86_INS_MOVSLDUP QC_X86_INS_MOVSLDUP
+#define UC_X86_INS_MOVSQ QC_X86_INS_MOVSQ
+#define UC_X86_INS_MOVSS QC_X86_INS_MOVSS
+#define UC_X86_INS_MOVSW QC_X86_INS_MOVSW
+#define UC_X86_INS_MOVSX QC_X86_INS_MOVSX
+#define UC_X86_INS_MOVSXD QC_X86_INS_MOVSXD
+#define UC_X86_INS_MOVUPD QC_X86_INS_MOVUPD
+#define UC_X86_INS_MOVUPS QC_X86_INS_MOVUPS
+#define UC_X86_INS_MOVZX QC_X86_INS_MOVZX
+#define UC_X86_INS_MPSADBW QC_X86_INS_MPSADBW
+#define UC_X86_INS_MUL QC_X86_INS_MUL
+#define UC_X86_INS_MULPD QC_X86_INS_MULPD
+#define UC_X86_INS_MULPS QC_X86_INS_MULPS
+#define UC_X86_INS_MULSD QC_X86_INS_MULSD
+#define UC_X86_INS_MULSS QC_X86_INS_MULSS
+#define UC_X86_INS_MULX QC_X86_INS_MULX
+#define UC_X86_INS_FMUL QC_X86_INS_FMUL
+#define UC_X86_INS_FIMUL QC_X86_INS_FIMUL
+#define UC_X86_INS_FMULP QC_X86_INS_FMULP
+#define UC_X86_INS_MWAIT QC_X86_INS_MWAIT
+#define UC_X86_INS_NEG QC_X86_INS_NEG
+#define UC_X86_INS_NOP QC_X86_INS_NOP
+#define UC_X86_INS_NOT QC_X86_INS_NOT
+#define UC_X86_INS_OUT QC_X86_INS_OUT
+#define UC_X86_INS_OUTSB QC_X86_INS_OUTSB
+#define UC_X86_INS_OUTSD QC_X86_INS_OUTSD
+#define UC_X86_INS_OUTSW QC_X86_INS_OUTSW
+#define UC_X86_INS_PACKUSDW QC_X86_INS_PACKUSDW
+#define UC_X86_INS_PAUSE QC_X86_INS_PAUSE
+#define UC_X86_INS_PAVGUSB QC_X86_INS_PAVGUSB
+#define UC_X86_INS_PBLENDVB QC_X86_INS_PBLENDVB
+#define UC_X86_INS_PBLENDW QC_X86_INS_PBLENDW
+#define UC_X86_INS_PCLMULQDQ QC_X86_INS_PCLMULQDQ
+#define UC_X86_INS_PCMPEQQ QC_X86_INS_PCMPEQQ
+#define UC_X86_INS_PCMPESTRI QC_X86_INS_PCMPESTRI
+#define UC_X86_INS_PCMPESTRM QC_X86_INS_PCMPESTRM
+#define UC_X86_INS_PCMPGTQ QC_X86_INS_PCMPGTQ
+#define UC_X86_INS_PCMPISTRI QC_X86_INS_PCMPISTRI
+#define UC_X86_INS_PCMPISTRM QC_X86_INS_PCMPISTRM
+#define UC_X86_INS_PCOMMIT QC_X86_INS_PCOMMIT
+#define UC_X86_INS_PDEP QC_X86_INS_PDEP
+#define UC_X86_INS_PEXT QC_X86_INS_PEXT
+#define UC_X86_INS_PEXTRB QC_X86_INS_PEXTRB
+#define UC_X86_INS_PEXTRD QC_X86_INS_PEXTRD
+#define UC_X86_INS_PEXTRQ QC_X86_INS_PEXTRQ
+#define UC_X86_INS_PF2ID QC_X86_INS_PF2ID
+#define UC_X86_INS_PF2IW QC_X86_INS_PF2IW
+#define UC_X86_INS_PFACC QC_X86_INS_PFACC
+#define UC_X86_INS_PFADD QC_X86_INS_PFADD
+#define UC_X86_INS_PFCMPEQ QC_X86_INS_PFCMPEQ
+#define UC_X86_INS_PFCMPGE QC_X86_INS_PFCMPGE
+#define UC_X86_INS_PFCMPGT QC_X86_INS_PFCMPGT
+#define UC_X86_INS_PFMAX QC_X86_INS_PFMAX
+#define UC_X86_INS_PFMIN QC_X86_INS_PFMIN
+#define UC_X86_INS_PFMUL QC_X86_INS_PFMUL
+#define UC_X86_INS_PFNACC QC_X86_INS_PFNACC
+#define UC_X86_INS_PFPNACC QC_X86_INS_PFPNACC
+#define UC_X86_INS_PFRCPIT1 QC_X86_INS_PFRCPIT1
+#define UC_X86_INS_PFRCPIT2 QC_X86_INS_PFRCPIT2
+#define UC_X86_INS_PFRCP QC_X86_INS_PFRCP
+#define UC_X86_INS_PFRSQIT1 QC_X86_INS_PFRSQIT1
+#define UC_X86_INS_PFRSQRT QC_X86_INS_PFRSQRT
+#define UC_X86_INS_PFSUBR QC_X86_INS_PFSUBR
+#define UC_X86_INS_PFSUB QC_X86_INS_PFSUB
+#define UC_X86_INS_PHMINPOSUW QC_X86_INS_PHMINPOSUW
+#define UC_X86_INS_PI2FD QC_X86_INS_PI2FD
+#define UC_X86_INS_PI2FW QC_X86_INS_PI2FW
+#define UC_X86_INS_PINSRB QC_X86_INS_PINSRB
+#define UC_X86_INS_PINSRD QC_X86_INS_PINSRD
+#define UC_X86_INS_PINSRQ QC_X86_INS_PINSRQ
+#define UC_X86_INS_PMAXSB QC_X86_INS_PMAXSB
+#define UC_X86_INS_PMAXSD QC_X86_INS_PMAXSD
+#define UC_X86_INS_PMAXUD QC_X86_INS_PMAXUD
+#define UC_X86_INS_PMAXUW QC_X86_INS_PMAXUW
+#define UC_X86_INS_PMINSB QC_X86_INS_PMINSB
+#define UC_X86_INS_PMINSD QC_X86_INS_PMINSD
+#define UC_X86_INS_PMINUD QC_X86_INS_PMINUD
+#define UC_X86_INS_PMINUW QC_X86_INS_PMINUW
+#define UC_X86_INS_PMOVSXBD QC_X86_INS_PMOVSXBD
+#define UC_X86_INS_PMOVSXBQ QC_X86_INS_PMOVSXBQ
+#define UC_X86_INS_PMOVSXBW QC_X86_INS_PMOVSXBW
+#define UC_X86_INS_PMOVSXDQ QC_X86_INS_PMOVSXDQ
+#define UC_X86_INS_PMOVSXWD QC_X86_INS_PMOVSXWD
+#define UC_X86_INS_PMOVSXWQ QC_X86_INS_PMOVSXWQ
+#define UC_X86_INS_PMOVZXBD QC_X86_INS_PMOVZXBD
+#define UC_X86_INS_PMOVZXBQ QC_X86_INS_PMOVZXBQ
+#define UC_X86_INS_PMOVZXBW QC_X86_INS_PMOVZXBW
+#define UC_X86_INS_PMOVZXDQ QC_X86_INS_PMOVZXDQ
+#define UC_X86_INS_PMOVZXWD QC_X86_INS_PMOVZXWD
+#define UC_X86_INS_PMOVZXWQ QC_X86_INS_PMOVZXWQ
+#define UC_X86_INS_PMULDQ QC_X86_INS_PMULDQ
+#define UC_X86_INS_PMULHRW QC_X86_INS_PMULHRW
+#define UC_X86_INS_PMULLD QC_X86_INS_PMULLD
+#define UC_X86_INS_POP QC_X86_INS_POP
+#define UC_X86_INS_POPAW QC_X86_INS_POPAW
+#define UC_X86_INS_POPAL QC_X86_INS_POPAL
+#define UC_X86_INS_POPCNT QC_X86_INS_POPCNT
+#define UC_X86_INS_POPF QC_X86_INS_POPF
+#define UC_X86_INS_POPFD QC_X86_INS_POPFD
+#define UC_X86_INS_POPFQ QC_X86_INS_POPFQ
+#define UC_X86_INS_PREFETCH QC_X86_INS_PREFETCH
+#define UC_X86_INS_PREFETCHNTA QC_X86_INS_PREFETCHNTA
+#define UC_X86_INS_PREFETCHT0 QC_X86_INS_PREFETCHT0
+#define UC_X86_INS_PREFETCHT1 QC_X86_INS_PREFETCHT1
+#define UC_X86_INS_PREFETCHT2 QC_X86_INS_PREFETCHT2
+#define UC_X86_INS_PREFETCHW QC_X86_INS_PREFETCHW
+#define UC_X86_INS_PSHUFD QC_X86_INS_PSHUFD
+#define UC_X86_INS_PSHUFHW QC_X86_INS_PSHUFHW
+#define UC_X86_INS_PSHUFLW QC_X86_INS_PSHUFLW
+#define UC_X86_INS_PSLLDQ QC_X86_INS_PSLLDQ
+#define UC_X86_INS_PSRLDQ QC_X86_INS_PSRLDQ
+#define UC_X86_INS_PSWAPD QC_X86_INS_PSWAPD
+#define UC_X86_INS_PTEST QC_X86_INS_PTEST
+#define UC_X86_INS_PUNPCKHQDQ QC_X86_INS_PUNPCKHQDQ
+#define UC_X86_INS_PUNPCKLQDQ QC_X86_INS_PUNPCKLQDQ
+#define UC_X86_INS_PUSH QC_X86_INS_PUSH
+#define UC_X86_INS_PUSHAW QC_X86_INS_PUSHAW
+#define UC_X86_INS_PUSHAL QC_X86_INS_PUSHAL
+#define UC_X86_INS_PUSHF QC_X86_INS_PUSHF
+#define UC_X86_INS_PUSHFD QC_X86_INS_PUSHFD
+#define UC_X86_INS_PUSHFQ QC_X86_INS_PUSHFQ
+#define UC_X86_INS_RCL QC_X86_INS_RCL
+#define UC_X86_INS_RCPPS QC_X86_INS_RCPPS
+#define UC_X86_INS_RCPSS QC_X86_INS_RCPSS
+#define UC_X86_INS_RCR QC_X86_INS_RCR
+#define UC_X86_INS_RDFSBASE QC_X86_INS_RDFSBASE
+#define UC_X86_INS_RDGSBASE QC_X86_INS_RDGSBASE
+#define UC_X86_INS_RDMSR QC_X86_INS_RDMSR
+#define UC_X86_INS_RDPMC QC_X86_INS_RDPMC
+#define UC_X86_INS_RDRAND QC_X86_INS_RDRAND
+#define UC_X86_INS_RDSEED QC_X86_INS_RDSEED
+#define UC_X86_INS_RDTSC QC_X86_INS_RDTSC
+#define UC_X86_INS_RDTSCP QC_X86_INS_RDTSCP
+#define UC_X86_INS_ROL QC_X86_INS_ROL
+#define UC_X86_INS_ROR QC_X86_INS_ROR
+#define UC_X86_INS_RORX QC_X86_INS_RORX
+#define UC_X86_INS_ROUNDPD QC_X86_INS_ROUNDPD
+#define UC_X86_INS_ROUNDPS QC_X86_INS_ROUNDPS
+#define UC_X86_INS_ROUNDSD QC_X86_INS_ROUNDSD
+#define UC_X86_INS_ROUNDSS QC_X86_INS_ROUNDSS
+#define UC_X86_INS_RSM QC_X86_INS_RSM
+#define UC_X86_INS_RSQRTPS QC_X86_INS_RSQRTPS
+#define UC_X86_INS_RSQRTSS QC_X86_INS_RSQRTSS
+#define UC_X86_INS_SAHF QC_X86_INS_SAHF
+#define UC_X86_INS_SAL QC_X86_INS_SAL
+#define UC_X86_INS_SALC QC_X86_INS_SALC
+#define UC_X86_INS_SAR QC_X86_INS_SAR
+#define UC_X86_INS_SARX QC_X86_INS_SARX
+#define UC_X86_INS_SBB QC_X86_INS_SBB
+#define UC_X86_INS_SCASB QC_X86_INS_SCASB
+#define UC_X86_INS_SCASD QC_X86_INS_SCASD
+#define UC_X86_INS_SCASQ QC_X86_INS_SCASQ
+#define UC_X86_INS_SCASW QC_X86_INS_SCASW
+#define UC_X86_INS_SETAE QC_X86_INS_SETAE
+#define UC_X86_INS_SETA QC_X86_INS_SETA
+#define UC_X86_INS_SETBE QC_X86_INS_SETBE
+#define UC_X86_INS_SETB QC_X86_INS_SETB
+#define UC_X86_INS_SETE QC_X86_INS_SETE
+#define UC_X86_INS_SETGE QC_X86_INS_SETGE
+#define UC_X86_INS_SETG QC_X86_INS_SETG
+#define UC_X86_INS_SETLE QC_X86_INS_SETLE
+#define UC_X86_INS_SETL QC_X86_INS_SETL
+#define UC_X86_INS_SETNE QC_X86_INS_SETNE
+#define UC_X86_INS_SETNO QC_X86_INS_SETNO
+#define UC_X86_INS_SETNP QC_X86_INS_SETNP
+#define UC_X86_INS_SETNS QC_X86_INS_SETNS
+#define UC_X86_INS_SETO QC_X86_INS_SETO
+#define UC_X86_INS_SETP QC_X86_INS_SETP
+#define UC_X86_INS_SETS QC_X86_INS_SETS
+#define UC_X86_INS_SFENCE QC_X86_INS_SFENCE
+#define UC_X86_INS_SGDT QC_X86_INS_SGDT
+#define UC_X86_INS_SHA1MSG1 QC_X86_INS_SHA1MSG1
+#define UC_X86_INS_SHA1MSG2 QC_X86_INS_SHA1MSG2
+#define UC_X86_INS_SHA1NEXTE QC_X86_INS_SHA1NEXTE
+#define UC_X86_INS_SHA1RNDS4 QC_X86_INS_SHA1RNDS4
+#define UC_X86_INS_SHA256MSG1 QC_X86_INS_SHA256MSG1
+#define UC_X86_INS_SHA256MSG2 QC_X86_INS_SHA256MSG2
+#define UC_X86_INS_SHA256RNDS2 QC_X86_INS_SHA256RNDS2
+#define UC_X86_INS_SHL QC_X86_INS_SHL
+#define UC_X86_INS_SHLD QC_X86_INS_SHLD
+#define UC_X86_INS_SHLX QC_X86_INS_SHLX
+#define UC_X86_INS_SHR QC_X86_INS_SHR
+#define UC_X86_INS_SHRD QC_X86_INS_SHRD
+#define UC_X86_INS_SHRX QC_X86_INS_SHRX
+#define UC_X86_INS_SHUFPD QC_X86_INS_SHUFPD
+#define UC_X86_INS_SHUFPS QC_X86_INS_SHUFPS
+#define UC_X86_INS_SIDT QC_X86_INS_SIDT
+#define UC_X86_INS_FSIN QC_X86_INS_FSIN
+#define UC_X86_INS_SKINIT QC_X86_INS_SKINIT
+#define UC_X86_INS_SLDT QC_X86_INS_SLDT
+#define UC_X86_INS_SMSW QC_X86_INS_SMSW
+#define UC_X86_INS_SQRTPD QC_X86_INS_SQRTPD
+#define UC_X86_INS_SQRTPS QC_X86_INS_SQRTPS
+#define UC_X86_INS_SQRTSD QC_X86_INS_SQRTSD
+#define UC_X86_INS_SQRTSS QC_X86_INS_SQRTSS
+#define UC_X86_INS_FSQRT QC_X86_INS_FSQRT
+#define UC_X86_INS_STAC QC_X86_INS_STAC
+#define UC_X86_INS_STC QC_X86_INS_STC
+#define UC_X86_INS_STD QC_X86_INS_STD
+#define UC_X86_INS_STGI QC_X86_INS_STGI
+#define UC_X86_INS_STI QC_X86_INS_STI
+#define UC_X86_INS_STMXCSR QC_X86_INS_STMXCSR
+#define UC_X86_INS_STOSB QC_X86_INS_STOSB
+#define UC_X86_INS_STOSD QC_X86_INS_STOSD
+#define UC_X86_INS_STOSQ QC_X86_INS_STOSQ
+#define UC_X86_INS_STOSW QC_X86_INS_STOSW
+#define UC_X86_INS_STR QC_X86_INS_STR
+#define UC_X86_INS_FST QC_X86_INS_FST
+#define UC_X86_INS_FSTP QC_X86_INS_FSTP
+#define UC_X86_INS_FSTPNCE QC_X86_INS_FSTPNCE
+#define UC_X86_INS_FXCH QC_X86_INS_FXCH
+#define UC_X86_INS_SUBPD QC_X86_INS_SUBPD
+#define UC_X86_INS_SUBPS QC_X86_INS_SUBPS
+#define UC_X86_INS_FSUBR QC_X86_INS_FSUBR
+#define UC_X86_INS_FISUBR QC_X86_INS_FISUBR
+#define UC_X86_INS_FSUBRP QC_X86_INS_FSUBRP
+#define UC_X86_INS_SUBSD QC_X86_INS_SUBSD
+#define UC_X86_INS_SUBSS QC_X86_INS_SUBSS
+#define UC_X86_INS_FSUB QC_X86_INS_FSUB
+#define UC_X86_INS_FISUB QC_X86_INS_FISUB
+#define UC_X86_INS_FSUBP QC_X86_INS_FSUBP
+#define UC_X86_INS_SWAPGS QC_X86_INS_SWAPGS
+#define UC_X86_INS_SYSCALL QC_X86_INS_SYSCALL
+#define UC_X86_INS_SYSENTER QC_X86_INS_SYSENTER
+#define UC_X86_INS_SYSEXIT QC_X86_INS_SYSEXIT
+#define UC_X86_INS_SYSRET QC_X86_INS_SYSRET
+#define UC_X86_INS_T1MSKC QC_X86_INS_T1MSKC
+#define UC_X86_INS_TEST QC_X86_INS_TEST
+#define UC_X86_INS_UD2 QC_X86_INS_UD2
+#define UC_X86_INS_FTST QC_X86_INS_FTST
+#define UC_X86_INS_TZCNT QC_X86_INS_TZCNT
+#define UC_X86_INS_TZMSK QC_X86_INS_TZMSK
+#define UC_X86_INS_FUCOMPI QC_X86_INS_FUCOMPI
+#define UC_X86_INS_FUCOMI QC_X86_INS_FUCOMI
+#define UC_X86_INS_FUCOMPP QC_X86_INS_FUCOMPP
+#define UC_X86_INS_FUCOMP QC_X86_INS_FUCOMP
+#define UC_X86_INS_FUCOM QC_X86_INS_FUCOM
+#define UC_X86_INS_UD2B QC_X86_INS_UD2B
+#define UC_X86_INS_UNPCKHPD QC_X86_INS_UNPCKHPD
+#define UC_X86_INS_UNPCKHPS QC_X86_INS_UNPCKHPS
+#define UC_X86_INS_UNPCKLPD QC_X86_INS_UNPCKLPD
+#define UC_X86_INS_UNPCKLPS QC_X86_INS_UNPCKLPS
+#define UC_X86_INS_VADDPD QC_X86_INS_VADDPD
+#define UC_X86_INS_VADDPS QC_X86_INS_VADDPS
+#define UC_X86_INS_VADDSD QC_X86_INS_VADDSD
+#define UC_X86_INS_VADDSS QC_X86_INS_VADDSS
+#define UC_X86_INS_VADDSUBPD QC_X86_INS_VADDSUBPD
+#define UC_X86_INS_VADDSUBPS QC_X86_INS_VADDSUBPS
+#define UC_X86_INS_VAESDECLAST QC_X86_INS_VAESDECLAST
+#define UC_X86_INS_VAESDEC QC_X86_INS_VAESDEC
+#define UC_X86_INS_VAESENCLAST QC_X86_INS_VAESENCLAST
+#define UC_X86_INS_VAESENC QC_X86_INS_VAESENC
+#define UC_X86_INS_VAESIMC QC_X86_INS_VAESIMC
+#define UC_X86_INS_VAESKEYGENASSIST QC_X86_INS_VAESKEYGENASSIST
+#define UC_X86_INS_VALIGND QC_X86_INS_VALIGND
+#define UC_X86_INS_VALIGNQ QC_X86_INS_VALIGNQ
+#define UC_X86_INS_VANDNPD QC_X86_INS_VANDNPD
+#define UC_X86_INS_VANDNPS QC_X86_INS_VANDNPS
+#define UC_X86_INS_VANDPD QC_X86_INS_VANDPD
+#define UC_X86_INS_VANDPS QC_X86_INS_VANDPS
+#define UC_X86_INS_VBLENDMPD QC_X86_INS_VBLENDMPD
+#define UC_X86_INS_VBLENDMPS QC_X86_INS_VBLENDMPS
+#define UC_X86_INS_VBLENDPD QC_X86_INS_VBLENDPD
+#define UC_X86_INS_VBLENDPS QC_X86_INS_VBLENDPS
+#define UC_X86_INS_VBLENDVPD QC_X86_INS_VBLENDVPD
+#define UC_X86_INS_VBLENDVPS QC_X86_INS_VBLENDVPS
+#define UC_X86_INS_VBROADCASTF128 QC_X86_INS_VBROADCASTF128
+#define UC_X86_INS_VBROADCASTI32X4 QC_X86_INS_VBROADCASTI32X4
+#define UC_X86_INS_VBROADCASTI64X4 QC_X86_INS_VBROADCASTI64X4
+#define UC_X86_INS_VBROADCASTSD QC_X86_INS_VBROADCASTSD
+#define UC_X86_INS_VBROADCASTSS QC_X86_INS_VBROADCASTSS
+#define UC_X86_INS_VCMPPD QC_X86_INS_VCMPPD
+#define UC_X86_INS_VCMPPS QC_X86_INS_VCMPPS
+#define UC_X86_INS_VCMPSD QC_X86_INS_VCMPSD
+#define UC_X86_INS_VCMPSS QC_X86_INS_VCMPSS
+#define UC_X86_INS_VCOMPRESSPD QC_X86_INS_VCOMPRESSPD
+#define UC_X86_INS_VCOMPRESSPS QC_X86_INS_VCOMPRESSPS
+#define UC_X86_INS_VCVTDQ2PD QC_X86_INS_VCVTDQ2PD
+#define UC_X86_INS_VCVTDQ2PS QC_X86_INS_VCVTDQ2PS
+#define UC_X86_INS_VCVTPD2DQX QC_X86_INS_VCVTPD2DQX
+#define UC_X86_INS_VCVTPD2DQ QC_X86_INS_VCVTPD2DQ
+#define UC_X86_INS_VCVTPD2PSX QC_X86_INS_VCVTPD2PSX
+#define UC_X86_INS_VCVTPD2PS QC_X86_INS_VCVTPD2PS
+#define UC_X86_INS_VCVTPD2UDQ QC_X86_INS_VCVTPD2UDQ
+#define UC_X86_INS_VCVTPH2PS QC_X86_INS_VCVTPH2PS
+#define UC_X86_INS_VCVTPS2DQ QC_X86_INS_VCVTPS2DQ
+#define UC_X86_INS_VCVTPS2PD QC_X86_INS_VCVTPS2PD
+#define UC_X86_INS_VCVTPS2PH QC_X86_INS_VCVTPS2PH
+#define UC_X86_INS_VCVTPS2UDQ QC_X86_INS_VCVTPS2UDQ
+#define UC_X86_INS_VCVTSD2SI QC_X86_INS_VCVTSD2SI
+#define UC_X86_INS_VCVTSD2USI QC_X86_INS_VCVTSD2USI
+#define UC_X86_INS_VCVTSS2SI QC_X86_INS_VCVTSS2SI
+#define UC_X86_INS_VCVTSS2USI QC_X86_INS_VCVTSS2USI
+#define UC_X86_INS_VCVTTPD2DQX QC_X86_INS_VCVTTPD2DQX
+#define UC_X86_INS_VCVTTPD2DQ QC_X86_INS_VCVTTPD2DQ
+#define UC_X86_INS_VCVTTPD2UDQ QC_X86_INS_VCVTTPD2UDQ
+#define UC_X86_INS_VCVTTPS2DQ QC_X86_INS_VCVTTPS2DQ
+#define UC_X86_INS_VCVTTPS2UDQ QC_X86_INS_VCVTTPS2UDQ
+#define UC_X86_INS_VCVTUDQ2PD QC_X86_INS_VCVTUDQ2PD
+#define UC_X86_INS_VCVTUDQ2PS QC_X86_INS_VCVTUDQ2PS
+#define UC_X86_INS_VDIVPD QC_X86_INS_VDIVPD
+#define UC_X86_INS_VDIVPS QC_X86_INS_VDIVPS
+#define UC_X86_INS_VDIVSD QC_X86_INS_VDIVSD
+#define UC_X86_INS_VDIVSS QC_X86_INS_VDIVSS
+#define UC_X86_INS_VDPPD QC_X86_INS_VDPPD
+#define UC_X86_INS_VDPPS QC_X86_INS_VDPPS
+#define UC_X86_INS_VERR QC_X86_INS_VERR
+#define UC_X86_INS_VERW QC_X86_INS_VERW
+#define UC_X86_INS_VEXP2PD QC_X86_INS_VEXP2PD
+#define UC_X86_INS_VEXP2PS QC_X86_INS_VEXP2PS
+#define UC_X86_INS_VEXPANDPD QC_X86_INS_VEXPANDPD
+#define UC_X86_INS_VEXPANDPS QC_X86_INS_VEXPANDPS
+#define UC_X86_INS_VEXTRACTF128 QC_X86_INS_VEXTRACTF128
+#define UC_X86_INS_VEXTRACTF32X4 QC_X86_INS_VEXTRACTF32X4
+#define UC_X86_INS_VEXTRACTF64X4 QC_X86_INS_VEXTRACTF64X4
+#define UC_X86_INS_VEXTRACTI128 QC_X86_INS_VEXTRACTI128
+#define UC_X86_INS_VEXTRACTI32X4 QC_X86_INS_VEXTRACTI32X4
+#define UC_X86_INS_VEXTRACTI64X4 QC_X86_INS_VEXTRACTI64X4
+#define UC_X86_INS_VEXTRACTPS QC_X86_INS_VEXTRACTPS
+#define UC_X86_INS_VFMADD132PD QC_X86_INS_VFMADD132PD
+#define UC_X86_INS_VFMADD132PS QC_X86_INS_VFMADD132PS
+#define UC_X86_INS_VFMADDPD QC_X86_INS_VFMADDPD
+#define UC_X86_INS_VFMADD213PD QC_X86_INS_VFMADD213PD
+#define UC_X86_INS_VFMADD231PD QC_X86_INS_VFMADD231PD
+#define UC_X86_INS_VFMADDPS QC_X86_INS_VFMADDPS
+#define UC_X86_INS_VFMADD213PS QC_X86_INS_VFMADD213PS
+#define UC_X86_INS_VFMADD231PS QC_X86_INS_VFMADD231PS
+#define UC_X86_INS_VFMADDSD QC_X86_INS_VFMADDSD
+#define UC_X86_INS_VFMADD213SD QC_X86_INS_VFMADD213SD
+#define UC_X86_INS_VFMADD132SD QC_X86_INS_VFMADD132SD
+#define UC_X86_INS_VFMADD231SD QC_X86_INS_VFMADD231SD
+#define UC_X86_INS_VFMADDSS QC_X86_INS_VFMADDSS
+#define UC_X86_INS_VFMADD213SS QC_X86_INS_VFMADD213SS
+#define UC_X86_INS_VFMADD132SS QC_X86_INS_VFMADD132SS
+#define UC_X86_INS_VFMADD231SS QC_X86_INS_VFMADD231SS
+#define UC_X86_INS_VFMADDSUB132PD QC_X86_INS_VFMADDSUB132PD
+#define UC_X86_INS_VFMADDSUB132PS QC_X86_INS_VFMADDSUB132PS
+#define UC_X86_INS_VFMADDSUBPD QC_X86_INS_VFMADDSUBPD
+#define UC_X86_INS_VFMADDSUB213PD QC_X86_INS_VFMADDSUB213PD
+#define UC_X86_INS_VFMADDSUB231PD QC_X86_INS_VFMADDSUB231PD
+#define UC_X86_INS_VFMADDSUBPS QC_X86_INS_VFMADDSUBPS
+#define UC_X86_INS_VFMADDSUB213PS QC_X86_INS_VFMADDSUB213PS
+#define UC_X86_INS_VFMADDSUB231PS QC_X86_INS_VFMADDSUB231PS
+#define UC_X86_INS_VFMSUB132PD QC_X86_INS_VFMSUB132PD
+#define UC_X86_INS_VFMSUB132PS QC_X86_INS_VFMSUB132PS
+#define UC_X86_INS_VFMSUBADD132PD QC_X86_INS_VFMSUBADD132PD
+#define UC_X86_INS_VFMSUBADD132PS QC_X86_INS_VFMSUBADD132PS
+#define UC_X86_INS_VFMSUBADDPD QC_X86_INS_VFMSUBADDPD
+#define UC_X86_INS_VFMSUBADD213PD QC_X86_INS_VFMSUBADD213PD
+#define UC_X86_INS_VFMSUBADD231PD QC_X86_INS_VFMSUBADD231PD
+#define UC_X86_INS_VFMSUBADDPS QC_X86_INS_VFMSUBADDPS
+#define UC_X86_INS_VFMSUBADD213PS QC_X86_INS_VFMSUBADD213PS
+#define UC_X86_INS_VFMSUBADD231PS QC_X86_INS_VFMSUBADD231PS
+#define UC_X86_INS_VFMSUBPD QC_X86_INS_VFMSUBPD
+#define UC_X86_INS_VFMSUB213PD QC_X86_INS_VFMSUB213PD
+#define UC_X86_INS_VFMSUB231PD QC_X86_INS_VFMSUB231PD
+#define UC_X86_INS_VFMSUBPS QC_X86_INS_VFMSUBPS
+#define UC_X86_INS_VFMSUB213PS QC_X86_INS_VFMSUB213PS
+#define UC_X86_INS_VFMSUB231PS QC_X86_INS_VFMSUB231PS
+#define UC_X86_INS_VFMSUBSD QC_X86_INS_VFMSUBSD
+#define UC_X86_INS_VFMSUB213SD QC_X86_INS_VFMSUB213SD
+#define UC_X86_INS_VFMSUB132SD QC_X86_INS_VFMSUB132SD
+#define UC_X86_INS_VFMSUB231SD QC_X86_INS_VFMSUB231SD
+#define UC_X86_INS_VFMSUBSS QC_X86_INS_VFMSUBSS
+#define UC_X86_INS_VFMSUB213SS QC_X86_INS_VFMSUB213SS
+#define UC_X86_INS_VFMSUB132SS QC_X86_INS_VFMSUB132SS
+#define UC_X86_INS_VFMSUB231SS QC_X86_INS_VFMSUB231SS
+#define UC_X86_INS_VFNMADD132PD QC_X86_INS_VFNMADD132PD
+#define UC_X86_INS_VFNMADD132PS QC_X86_INS_VFNMADD132PS
+#define UC_X86_INS_VFNMADDPD QC_X86_INS_VFNMADDPD
+#define UC_X86_INS_VFNMADD213PD QC_X86_INS_VFNMADD213PD
+#define UC_X86_INS_VFNMADD231PD QC_X86_INS_VFNMADD231PD
+#define UC_X86_INS_VFNMADDPS QC_X86_INS_VFNMADDPS
+#define UC_X86_INS_VFNMADD213PS QC_X86_INS_VFNMADD213PS
+#define UC_X86_INS_VFNMADD231PS QC_X86_INS_VFNMADD231PS
+#define UC_X86_INS_VFNMADDSD QC_X86_INS_VFNMADDSD
+#define UC_X86_INS_VFNMADD213SD QC_X86_INS_VFNMADD213SD
+#define UC_X86_INS_VFNMADD132SD QC_X86_INS_VFNMADD132SD
+#define UC_X86_INS_VFNMADD231SD QC_X86_INS_VFNMADD231SD
+#define UC_X86_INS_VFNMADDSS QC_X86_INS_VFNMADDSS
+#define UC_X86_INS_VFNMADD213SS QC_X86_INS_VFNMADD213SS
+#define UC_X86_INS_VFNMADD132SS QC_X86_INS_VFNMADD132SS
+#define UC_X86_INS_VFNMADD231SS QC_X86_INS_VFNMADD231SS
+#define UC_X86_INS_VFNMSUB132PD QC_X86_INS_VFNMSUB132PD
+#define UC_X86_INS_VFNMSUB132PS QC_X86_INS_VFNMSUB132PS
+#define UC_X86_INS_VFNMSUBPD QC_X86_INS_VFNMSUBPD
+#define UC_X86_INS_VFNMSUB213PD QC_X86_INS_VFNMSUB213PD
+#define UC_X86_INS_VFNMSUB231PD QC_X86_INS_VFNMSUB231PD
+#define UC_X86_INS_VFNMSUBPS QC_X86_INS_VFNMSUBPS
+#define UC_X86_INS_VFNMSUB213PS QC_X86_INS_VFNMSUB213PS
+#define UC_X86_INS_VFNMSUB231PS QC_X86_INS_VFNMSUB231PS
+#define UC_X86_INS_VFNMSUBSD QC_X86_INS_VFNMSUBSD
+#define UC_X86_INS_VFNMSUB213SD QC_X86_INS_VFNMSUB213SD
+#define UC_X86_INS_VFNMSUB132SD QC_X86_INS_VFNMSUB132SD
+#define UC_X86_INS_VFNMSUB231SD QC_X86_INS_VFNMSUB231SD
+#define UC_X86_INS_VFNMSUBSS QC_X86_INS_VFNMSUBSS
+#define UC_X86_INS_VFNMSUB213SS QC_X86_INS_VFNMSUB213SS
+#define UC_X86_INS_VFNMSUB132SS QC_X86_INS_VFNMSUB132SS
+#define UC_X86_INS_VFNMSUB231SS QC_X86_INS_VFNMSUB231SS
+#define UC_X86_INS_VFRCZPD QC_X86_INS_VFRCZPD
+#define UC_X86_INS_VFRCZPS QC_X86_INS_VFRCZPS
+#define UC_X86_INS_VFRCZSD QC_X86_INS_VFRCZSD
+#define UC_X86_INS_VFRCZSS QC_X86_INS_VFRCZSS
+#define UC_X86_INS_VORPD QC_X86_INS_VORPD
+#define UC_X86_INS_VORPS QC_X86_INS_VORPS
+#define UC_X86_INS_VXORPD QC_X86_INS_VXORPD
+#define UC_X86_INS_VXORPS QC_X86_INS_VXORPS
+#define UC_X86_INS_VGATHERDPD QC_X86_INS_VGATHERDPD
+#define UC_X86_INS_VGATHERDPS QC_X86_INS_VGATHERDPS
+#define UC_X86_INS_VGATHERPF0DPD QC_X86_INS_VGATHERPF0DPD
+#define UC_X86_INS_VGATHERPF0DPS QC_X86_INS_VGATHERPF0DPS
+#define UC_X86_INS_VGATHERPF0QPD QC_X86_INS_VGATHERPF0QPD
+#define UC_X86_INS_VGATHERPF0QPS QC_X86_INS_VGATHERPF0QPS
+#define UC_X86_INS_VGATHERPF1DPD QC_X86_INS_VGATHERPF1DPD
+#define UC_X86_INS_VGATHERPF1DPS QC_X86_INS_VGATHERPF1DPS
+#define UC_X86_INS_VGATHERPF1QPD QC_X86_INS_VGATHERPF1QPD
+#define UC_X86_INS_VGATHERPF1QPS QC_X86_INS_VGATHERPF1QPS
+#define UC_X86_INS_VGATHERQPD QC_X86_INS_VGATHERQPD
+#define UC_X86_INS_VGATHERQPS QC_X86_INS_VGATHERQPS
+#define UC_X86_INS_VHADDPD QC_X86_INS_VHADDPD
+#define UC_X86_INS_VHADDPS QC_X86_INS_VHADDPS
+#define UC_X86_INS_VHSUBPD QC_X86_INS_VHSUBPD
+#define UC_X86_INS_VHSUBPS QC_X86_INS_VHSUBPS
+#define UC_X86_INS_VINSERTF128 QC_X86_INS_VINSERTF128
+#define UC_X86_INS_VINSERTF32X4 QC_X86_INS_VINSERTF32X4
+#define UC_X86_INS_VINSERTF32X8 QC_X86_INS_VINSERTF32X8
+#define UC_X86_INS_VINSERTF64X2 QC_X86_INS_VINSERTF64X2
+#define UC_X86_INS_VINSERTF64X4 QC_X86_INS_VINSERTF64X4
+#define UC_X86_INS_VINSERTI128 QC_X86_INS_VINSERTI128
+#define UC_X86_INS_VINSERTI32X4 QC_X86_INS_VINSERTI32X4
+#define UC_X86_INS_VINSERTI32X8 QC_X86_INS_VINSERTI32X8
+#define UC_X86_INS_VINSERTI64X2 QC_X86_INS_VINSERTI64X2
+#define UC_X86_INS_VINSERTI64X4 QC_X86_INS_VINSERTI64X4
+#define UC_X86_INS_VINSERTPS QC_X86_INS_VINSERTPS
+#define UC_X86_INS_VLDDQU QC_X86_INS_VLDDQU
+#define UC_X86_INS_VLDMXCSR QC_X86_INS_VLDMXCSR
+#define UC_X86_INS_VMASKMOVDQU QC_X86_INS_VMASKMOVDQU
+#define UC_X86_INS_VMASKMOVPD QC_X86_INS_VMASKMOVPD
+#define UC_X86_INS_VMASKMOVPS QC_X86_INS_VMASKMOVPS
+#define UC_X86_INS_VMAXPD QC_X86_INS_VMAXPD
+#define UC_X86_INS_VMAXPS QC_X86_INS_VMAXPS
+#define UC_X86_INS_VMAXSD QC_X86_INS_VMAXSD
+#define UC_X86_INS_VMAXSS QC_X86_INS_VMAXSS
+#define UC_X86_INS_VMCALL QC_X86_INS_VMCALL
+#define UC_X86_INS_VMCLEAR QC_X86_INS_VMCLEAR
+#define UC_X86_INS_VMFUNC QC_X86_INS_VMFUNC
+#define UC_X86_INS_VMINPD QC_X86_INS_VMINPD
+#define UC_X86_INS_VMINPS QC_X86_INS_VMINPS
+#define UC_X86_INS_VMINSD QC_X86_INS_VMINSD
+#define UC_X86_INS_VMINSS QC_X86_INS_VMINSS
+#define UC_X86_INS_VMLAUNCH QC_X86_INS_VMLAUNCH
+#define UC_X86_INS_VMLOAD QC_X86_INS_VMLOAD
+#define UC_X86_INS_VMMCALL QC_X86_INS_VMMCALL
+#define UC_X86_INS_VMOVQ QC_X86_INS_VMOVQ
+#define UC_X86_INS_VMOVDDUP QC_X86_INS_VMOVDDUP
+#define UC_X86_INS_VMOVD QC_X86_INS_VMOVD
+#define UC_X86_INS_VMOVDQA32 QC_X86_INS_VMOVDQA32
+#define UC_X86_INS_VMOVDQA64 QC_X86_INS_VMOVDQA64
+#define UC_X86_INS_VMOVDQA QC_X86_INS_VMOVDQA
+#define UC_X86_INS_VMOVDQU16 QC_X86_INS_VMOVDQU16
+#define UC_X86_INS_VMOVDQU32 QC_X86_INS_VMOVDQU32
+#define UC_X86_INS_VMOVDQU64 QC_X86_INS_VMOVDQU64
+#define UC_X86_INS_VMOVDQU8 QC_X86_INS_VMOVDQU8
+#define UC_X86_INS_VMOVDQU QC_X86_INS_VMOVDQU
+#define UC_X86_INS_VMOVHLPS QC_X86_INS_VMOVHLPS
+#define UC_X86_INS_VMOVHPD QC_X86_INS_VMOVHPD
+#define UC_X86_INS_VMOVHPS QC_X86_INS_VMOVHPS
+#define UC_X86_INS_VMOVLHPS QC_X86_INS_VMOVLHPS
+#define UC_X86_INS_VMOVLPD QC_X86_INS_VMOVLPD
+#define UC_X86_INS_VMOVLPS QC_X86_INS_VMOVLPS
+#define UC_X86_INS_VMOVMSKPD QC_X86_INS_VMOVMSKPD
+#define UC_X86_INS_VMOVMSKPS QC_X86_INS_VMOVMSKPS
+#define UC_X86_INS_VMOVNTDQA QC_X86_INS_VMOVNTDQA
+#define UC_X86_INS_VMOVNTDQ QC_X86_INS_VMOVNTDQ
+#define UC_X86_INS_VMOVNTPD QC_X86_INS_VMOVNTPD
+#define UC_X86_INS_VMOVNTPS QC_X86_INS_VMOVNTPS
+#define UC_X86_INS_VMOVSD QC_X86_INS_VMOVSD
+#define UC_X86_INS_VMOVSHDUP QC_X86_INS_VMOVSHDUP
+#define UC_X86_INS_VMOVSLDUP QC_X86_INS_VMOVSLDUP
+#define UC_X86_INS_VMOVSS QC_X86_INS_VMOVSS
+#define UC_X86_INS_VMOVUPD QC_X86_INS_VMOVUPD
+#define UC_X86_INS_VMOVUPS QC_X86_INS_VMOVUPS
+#define UC_X86_INS_VMPSADBW QC_X86_INS_VMPSADBW
+#define UC_X86_INS_VMPTRLD QC_X86_INS_VMPTRLD
+#define UC_X86_INS_VMPTRST QC_X86_INS_VMPTRST
+#define UC_X86_INS_VMREAD QC_X86_INS_VMREAD
+#define UC_X86_INS_VMRESUME QC_X86_INS_VMRESUME
+#define UC_X86_INS_VMRUN QC_X86_INS_VMRUN
+#define UC_X86_INS_VMSAVE QC_X86_INS_VMSAVE
+#define UC_X86_INS_VMULPD QC_X86_INS_VMULPD
+#define UC_X86_INS_VMULPS QC_X86_INS_VMULPS
+#define UC_X86_INS_VMULSD QC_X86_INS_VMULSD
+#define UC_X86_INS_VMULSS QC_X86_INS_VMULSS
+#define UC_X86_INS_VMWRITE QC_X86_INS_VMWRITE
+#define UC_X86_INS_VMXOFF QC_X86_INS_VMXOFF
+#define UC_X86_INS_VMXON QC_X86_INS_VMXON
+#define UC_X86_INS_VPABSB QC_X86_INS_VPABSB
+#define UC_X86_INS_VPABSD QC_X86_INS_VPABSD
+#define UC_X86_INS_VPABSQ QC_X86_INS_VPABSQ
+#define UC_X86_INS_VPABSW QC_X86_INS_VPABSW
+#define UC_X86_INS_VPACKSSDW QC_X86_INS_VPACKSSDW
+#define UC_X86_INS_VPACKSSWB QC_X86_INS_VPACKSSWB
+#define UC_X86_INS_VPACKUSDW QC_X86_INS_VPACKUSDW
+#define UC_X86_INS_VPACKUSWB QC_X86_INS_VPACKUSWB
+#define UC_X86_INS_VPADDB QC_X86_INS_VPADDB
+#define UC_X86_INS_VPADDD QC_X86_INS_VPADDD
+#define UC_X86_INS_VPADDQ QC_X86_INS_VPADDQ
+#define UC_X86_INS_VPADDSB QC_X86_INS_VPADDSB
+#define UC_X86_INS_VPADDSW QC_X86_INS_VPADDSW
+#define UC_X86_INS_VPADDUSB QC_X86_INS_VPADDUSB
+#define UC_X86_INS_VPADDUSW QC_X86_INS_VPADDUSW
+#define UC_X86_INS_VPADDW QC_X86_INS_VPADDW
+#define UC_X86_INS_VPALIGNR QC_X86_INS_VPALIGNR
+#define UC_X86_INS_VPANDD QC_X86_INS_VPANDD
+#define UC_X86_INS_VPANDND QC_X86_INS_VPANDND
+#define UC_X86_INS_VPANDNQ QC_X86_INS_VPANDNQ
+#define UC_X86_INS_VPANDN QC_X86_INS_VPANDN
+#define UC_X86_INS_VPANDQ QC_X86_INS_VPANDQ
+#define UC_X86_INS_VPAND QC_X86_INS_VPAND
+#define UC_X86_INS_VPAVGB QC_X86_INS_VPAVGB
+#define UC_X86_INS_VPAVGW QC_X86_INS_VPAVGW
+#define UC_X86_INS_VPBLENDD QC_X86_INS_VPBLENDD
+#define UC_X86_INS_VPBLENDMB QC_X86_INS_VPBLENDMB
+#define UC_X86_INS_VPBLENDMD QC_X86_INS_VPBLENDMD
+#define UC_X86_INS_VPBLENDMQ QC_X86_INS_VPBLENDMQ
+#define UC_X86_INS_VPBLENDMW QC_X86_INS_VPBLENDMW
+#define UC_X86_INS_VPBLENDVB QC_X86_INS_VPBLENDVB
+#define UC_X86_INS_VPBLENDW QC_X86_INS_VPBLENDW
+#define UC_X86_INS_VPBROADCASTB QC_X86_INS_VPBROADCASTB
+#define UC_X86_INS_VPBROADCASTD QC_X86_INS_VPBROADCASTD
+#define UC_X86_INS_VPBROADCASTMB2Q QC_X86_INS_VPBROADCASTMB2Q
+#define UC_X86_INS_VPBROADCASTMW2D QC_X86_INS_VPBROADCASTMW2D
+#define UC_X86_INS_VPBROADCASTQ QC_X86_INS_VPBROADCASTQ
+#define UC_X86_INS_VPBROADCASTW QC_X86_INS_VPBROADCASTW
+#define UC_X86_INS_VPCLMULQDQ QC_X86_INS_VPCLMULQDQ
+#define UC_X86_INS_VPCMOV QC_X86_INS_VPCMOV
+#define UC_X86_INS_VPCMPB QC_X86_INS_VPCMPB
+#define UC_X86_INS_VPCMPD QC_X86_INS_VPCMPD
+#define UC_X86_INS_VPCMPEQB QC_X86_INS_VPCMPEQB
+#define UC_X86_INS_VPCMPEQD QC_X86_INS_VPCMPEQD
+#define UC_X86_INS_VPCMPEQQ QC_X86_INS_VPCMPEQQ
+#define UC_X86_INS_VPCMPEQW QC_X86_INS_VPCMPEQW
+#define UC_X86_INS_VPCMPESTRI QC_X86_INS_VPCMPESTRI
+#define UC_X86_INS_VPCMPESTRM QC_X86_INS_VPCMPESTRM
+#define UC_X86_INS_VPCMPGTB QC_X86_INS_VPCMPGTB
+#define UC_X86_INS_VPCMPGTD QC_X86_INS_VPCMPGTD
+#define UC_X86_INS_VPCMPGTQ QC_X86_INS_VPCMPGTQ
+#define UC_X86_INS_VPCMPGTW QC_X86_INS_VPCMPGTW
+#define UC_X86_INS_VPCMPISTRI QC_X86_INS_VPCMPISTRI
+#define UC_X86_INS_VPCMPISTRM QC_X86_INS_VPCMPISTRM
+#define UC_X86_INS_VPCMPQ QC_X86_INS_VPCMPQ
+#define UC_X86_INS_VPCMPUB QC_X86_INS_VPCMPUB
+#define UC_X86_INS_VPCMPUD QC_X86_INS_VPCMPUD
+#define UC_X86_INS_VPCMPUQ QC_X86_INS_VPCMPUQ
+#define UC_X86_INS_VPCMPUW QC_X86_INS_VPCMPUW
+#define UC_X86_INS_VPCMPW QC_X86_INS_VPCMPW
+#define UC_X86_INS_VPCOMB QC_X86_INS_VPCOMB
+#define UC_X86_INS_VPCOMD QC_X86_INS_VPCOMD
+#define UC_X86_INS_VPCOMPRESSD QC_X86_INS_VPCOMPRESSD
+#define UC_X86_INS_VPCOMPRESSQ QC_X86_INS_VPCOMPRESSQ
+#define UC_X86_INS_VPCOMQ QC_X86_INS_VPCOMQ
+#define UC_X86_INS_VPCOMUB QC_X86_INS_VPCOMUB
+#define UC_X86_INS_VPCOMUD QC_X86_INS_VPCOMUD
+#define UC_X86_INS_VPCOMUQ QC_X86_INS_VPCOMUQ
+#define UC_X86_INS_VPCOMUW QC_X86_INS_VPCOMUW
+#define UC_X86_INS_VPCOMW QC_X86_INS_VPCOMW
+#define UC_X86_INS_VPCONFLICTD QC_X86_INS_VPCONFLICTD
+#define UC_X86_INS_VPCONFLICTQ QC_X86_INS_VPCONFLICTQ
+#define UC_X86_INS_VPERM2F128 QC_X86_INS_VPERM2F128
+#define UC_X86_INS_VPERM2I128 QC_X86_INS_VPERM2I128
+#define UC_X86_INS_VPERMD QC_X86_INS_VPERMD
+#define UC_X86_INS_VPERMI2D QC_X86_INS_VPERMI2D
+#define UC_X86_INS_VPERMI2PD QC_X86_INS_VPERMI2PD
+#define UC_X86_INS_VPERMI2PS QC_X86_INS_VPERMI2PS
+#define UC_X86_INS_VPERMI2Q QC_X86_INS_VPERMI2Q
+#define UC_X86_INS_VPERMIL2PD QC_X86_INS_VPERMIL2PD
+#define UC_X86_INS_VPERMIL2PS QC_X86_INS_VPERMIL2PS
+#define UC_X86_INS_VPERMILPD QC_X86_INS_VPERMILPD
+#define UC_X86_INS_VPERMILPS QC_X86_INS_VPERMILPS
+#define UC_X86_INS_VPERMPD QC_X86_INS_VPERMPD
+#define UC_X86_INS_VPERMPS QC_X86_INS_VPERMPS
+#define UC_X86_INS_VPERMQ QC_X86_INS_VPERMQ
+#define UC_X86_INS_VPERMT2D QC_X86_INS_VPERMT2D
+#define UC_X86_INS_VPERMT2PD QC_X86_INS_VPERMT2PD
+#define UC_X86_INS_VPERMT2PS QC_X86_INS_VPERMT2PS
+#define UC_X86_INS_VPERMT2Q QC_X86_INS_VPERMT2Q
+#define UC_X86_INS_VPEXPANDD QC_X86_INS_VPEXPANDD
+#define UC_X86_INS_VPEXPANDQ QC_X86_INS_VPEXPANDQ
+#define UC_X86_INS_VPEXTRB QC_X86_INS_VPEXTRB
+#define UC_X86_INS_VPEXTRD QC_X86_INS_VPEXTRD
+#define UC_X86_INS_VPEXTRQ QC_X86_INS_VPEXTRQ
+#define UC_X86_INS_VPEXTRW QC_X86_INS_VPEXTRW
+#define UC_X86_INS_VPGATHERDD QC_X86_INS_VPGATHERDD
+#define UC_X86_INS_VPGATHERDQ QC_X86_INS_VPGATHERDQ
+#define UC_X86_INS_VPGATHERQD QC_X86_INS_VPGATHERQD
+#define UC_X86_INS_VPGATHERQQ QC_X86_INS_VPGATHERQQ
+#define UC_X86_INS_VPHADDBD QC_X86_INS_VPHADDBD
+#define UC_X86_INS_VPHADDBQ QC_X86_INS_VPHADDBQ
+#define UC_X86_INS_VPHADDBW QC_X86_INS_VPHADDBW
+#define UC_X86_INS_VPHADDDQ QC_X86_INS_VPHADDDQ
+#define UC_X86_INS_VPHADDD QC_X86_INS_VPHADDD
+#define UC_X86_INS_VPHADDSW QC_X86_INS_VPHADDSW
+#define UC_X86_INS_VPHADDUBD QC_X86_INS_VPHADDUBD
+#define UC_X86_INS_VPHADDUBQ QC_X86_INS_VPHADDUBQ
+#define UC_X86_INS_VPHADDUBW QC_X86_INS_VPHADDUBW
+#define UC_X86_INS_VPHADDUDQ QC_X86_INS_VPHADDUDQ
+#define UC_X86_INS_VPHADDUWD QC_X86_INS_VPHADDUWD
+#define UC_X86_INS_VPHADDUWQ QC_X86_INS_VPHADDUWQ
+#define UC_X86_INS_VPHADDWD QC_X86_INS_VPHADDWD
+#define UC_X86_INS_VPHADDWQ QC_X86_INS_VPHADDWQ
+#define UC_X86_INS_VPHADDW QC_X86_INS_VPHADDW
+#define UC_X86_INS_VPHMINPOSUW QC_X86_INS_VPHMINPOSUW
+#define UC_X86_INS_VPHSUBBW QC_X86_INS_VPHSUBBW
+#define UC_X86_INS_VPHSUBDQ QC_X86_INS_VPHSUBDQ
+#define UC_X86_INS_VPHSUBD QC_X86_INS_VPHSUBD
+#define UC_X86_INS_VPHSUBSW QC_X86_INS_VPHSUBSW
+#define UC_X86_INS_VPHSUBWD QC_X86_INS_VPHSUBWD
+#define UC_X86_INS_VPHSUBW QC_X86_INS_VPHSUBW
+#define UC_X86_INS_VPINSRB QC_X86_INS_VPINSRB
+#define UC_X86_INS_VPINSRD QC_X86_INS_VPINSRD
+#define UC_X86_INS_VPINSRQ QC_X86_INS_VPINSRQ
+#define UC_X86_INS_VPINSRW QC_X86_INS_VPINSRW
+#define UC_X86_INS_VPLZCNTD QC_X86_INS_VPLZCNTD
+#define UC_X86_INS_VPLZCNTQ QC_X86_INS_VPLZCNTQ
+#define UC_X86_INS_VPMACSDD QC_X86_INS_VPMACSDD
+#define UC_X86_INS_VPMACSDQH QC_X86_INS_VPMACSDQH
+#define UC_X86_INS_VPMACSDQL QC_X86_INS_VPMACSDQL
+#define UC_X86_INS_VPMACSSDD QC_X86_INS_VPMACSSDD
+#define UC_X86_INS_VPMACSSDQH QC_X86_INS_VPMACSSDQH
+#define UC_X86_INS_VPMACSSDQL QC_X86_INS_VPMACSSDQL
+#define UC_X86_INS_VPMACSSWD QC_X86_INS_VPMACSSWD
+#define UC_X86_INS_VPMACSSWW QC_X86_INS_VPMACSSWW
+#define UC_X86_INS_VPMACSWD QC_X86_INS_VPMACSWD
+#define UC_X86_INS_VPMACSWW QC_X86_INS_VPMACSWW
+#define UC_X86_INS_VPMADCSSWD QC_X86_INS_VPMADCSSWD
+#define UC_X86_INS_VPMADCSWD QC_X86_INS_VPMADCSWD
+#define UC_X86_INS_VPMADDUBSW QC_X86_INS_VPMADDUBSW
+#define UC_X86_INS_VPMADDWD QC_X86_INS_VPMADDWD
+#define UC_X86_INS_VPMASKMOVD QC_X86_INS_VPMASKMOVD
+#define UC_X86_INS_VPMASKMOVQ QC_X86_INS_VPMASKMOVQ
+#define UC_X86_INS_VPMAXSB QC_X86_INS_VPMAXSB
+#define UC_X86_INS_VPMAXSD QC_X86_INS_VPMAXSD
+#define UC_X86_INS_VPMAXSQ QC_X86_INS_VPMAXSQ
+#define UC_X86_INS_VPMAXSW QC_X86_INS_VPMAXSW
+#define UC_X86_INS_VPMAXUB QC_X86_INS_VPMAXUB
+#define UC_X86_INS_VPMAXUD QC_X86_INS_VPMAXUD
+#define UC_X86_INS_VPMAXUQ QC_X86_INS_VPMAXUQ
+#define UC_X86_INS_VPMAXUW QC_X86_INS_VPMAXUW
+#define UC_X86_INS_VPMINSB QC_X86_INS_VPMINSB
+#define UC_X86_INS_VPMINSD QC_X86_INS_VPMINSD
+#define UC_X86_INS_VPMINSQ QC_X86_INS_VPMINSQ
+#define UC_X86_INS_VPMINSW QC_X86_INS_VPMINSW
+#define UC_X86_INS_VPMINUB QC_X86_INS_VPMINUB
+#define UC_X86_INS_VPMINUD QC_X86_INS_VPMINUD
+#define UC_X86_INS_VPMINUQ QC_X86_INS_VPMINUQ
+#define UC_X86_INS_VPMINUW QC_X86_INS_VPMINUW
+#define UC_X86_INS_VPMOVDB QC_X86_INS_VPMOVDB
+#define UC_X86_INS_VPMOVDW QC_X86_INS_VPMOVDW
+#define UC_X86_INS_VPMOVM2B QC_X86_INS_VPMOVM2B
+#define UC_X86_INS_VPMOVM2D QC_X86_INS_VPMOVM2D
+#define UC_X86_INS_VPMOVM2Q QC_X86_INS_VPMOVM2Q
+#define UC_X86_INS_VPMOVM2W QC_X86_INS_VPMOVM2W
+#define UC_X86_INS_VPMOVMSKB QC_X86_INS_VPMOVMSKB
+#define UC_X86_INS_VPMOVQB QC_X86_INS_VPMOVQB
+#define UC_X86_INS_VPMOVQD QC_X86_INS_VPMOVQD
+#define UC_X86_INS_VPMOVQW QC_X86_INS_VPMOVQW
+#define UC_X86_INS_VPMOVSDB QC_X86_INS_VPMOVSDB
+#define UC_X86_INS_VPMOVSDW QC_X86_INS_VPMOVSDW
+#define UC_X86_INS_VPMOVSQB QC_X86_INS_VPMOVSQB
+#define UC_X86_INS_VPMOVSQD QC_X86_INS_VPMOVSQD
+#define UC_X86_INS_VPMOVSQW QC_X86_INS_VPMOVSQW
+#define UC_X86_INS_VPMOVSXBD QC_X86_INS_VPMOVSXBD
+#define UC_X86_INS_VPMOVSXBQ QC_X86_INS_VPMOVSXBQ
+#define UC_X86_INS_VPMOVSXBW QC_X86_INS_VPMOVSXBW
+#define UC_X86_INS_VPMOVSXDQ QC_X86_INS_VPMOVSXDQ
+#define UC_X86_INS_VPMOVSXWD QC_X86_INS_VPMOVSXWD
+#define UC_X86_INS_VPMOVSXWQ QC_X86_INS_VPMOVSXWQ
+#define UC_X86_INS_VPMOVUSDB QC_X86_INS_VPMOVUSDB
+#define UC_X86_INS_VPMOVUSDW QC_X86_INS_VPMOVUSDW
+#define UC_X86_INS_VPMOVUSQB QC_X86_INS_VPMOVUSQB
+#define UC_X86_INS_VPMOVUSQD QC_X86_INS_VPMOVUSQD
+#define UC_X86_INS_VPMOVUSQW QC_X86_INS_VPMOVUSQW
+#define UC_X86_INS_VPMOVZXBD QC_X86_INS_VPMOVZXBD
+#define UC_X86_INS_VPMOVZXBQ QC_X86_INS_VPMOVZXBQ
+#define UC_X86_INS_VPMOVZXBW QC_X86_INS_VPMOVZXBW
+#define UC_X86_INS_VPMOVZXDQ QC_X86_INS_VPMOVZXDQ
+#define UC_X86_INS_VPMOVZXWD QC_X86_INS_VPMOVZXWD
+#define UC_X86_INS_VPMOVZXWQ QC_X86_INS_VPMOVZXWQ
+#define UC_X86_INS_VPMULDQ QC_X86_INS_VPMULDQ
+#define UC_X86_INS_VPMULHRSW QC_X86_INS_VPMULHRSW
+#define UC_X86_INS_VPMULHUW QC_X86_INS_VPMULHUW
+#define UC_X86_INS_VPMULHW QC_X86_INS_VPMULHW
+#define UC_X86_INS_VPMULLD QC_X86_INS_VPMULLD
+#define UC_X86_INS_VPMULLQ QC_X86_INS_VPMULLQ
+#define UC_X86_INS_VPMULLW QC_X86_INS_VPMULLW
+#define UC_X86_INS_VPMULUDQ QC_X86_INS_VPMULUDQ
+#define UC_X86_INS_VPORD QC_X86_INS_VPORD
+#define UC_X86_INS_VPORQ QC_X86_INS_VPORQ
+#define UC_X86_INS_VPOR QC_X86_INS_VPOR
+#define UC_X86_INS_VPPERM QC_X86_INS_VPPERM
+#define UC_X86_INS_VPROTB QC_X86_INS_VPROTB
+#define UC_X86_INS_VPROTD QC_X86_INS_VPROTD
+#define UC_X86_INS_VPROTQ QC_X86_INS_VPROTQ
+#define UC_X86_INS_VPROTW QC_X86_INS_VPROTW
+#define UC_X86_INS_VPSADBW QC_X86_INS_VPSADBW
+#define UC_X86_INS_VPSCATTERDD QC_X86_INS_VPSCATTERDD
+#define UC_X86_INS_VPSCATTERDQ QC_X86_INS_VPSCATTERDQ
+#define UC_X86_INS_VPSCATTERQD QC_X86_INS_VPSCATTERQD
+#define UC_X86_INS_VPSCATTERQQ QC_X86_INS_VPSCATTERQQ
+#define UC_X86_INS_VPSHAB QC_X86_INS_VPSHAB
+#define UC_X86_INS_VPSHAD QC_X86_INS_VPSHAD
+#define UC_X86_INS_VPSHAQ QC_X86_INS_VPSHAQ
+#define UC_X86_INS_VPSHAW QC_X86_INS_VPSHAW
+#define UC_X86_INS_VPSHLB QC_X86_INS_VPSHLB
+#define UC_X86_INS_VPSHLD QC_X86_INS_VPSHLD
+#define UC_X86_INS_VPSHLQ QC_X86_INS_VPSHLQ
+#define UC_X86_INS_VPSHLW QC_X86_INS_VPSHLW
+#define UC_X86_INS_VPSHUFB QC_X86_INS_VPSHUFB
+#define UC_X86_INS_VPSHUFD QC_X86_INS_VPSHUFD
+#define UC_X86_INS_VPSHUFHW QC_X86_INS_VPSHUFHW
+#define UC_X86_INS_VPSHUFLW QC_X86_INS_VPSHUFLW
+#define UC_X86_INS_VPSIGNB QC_X86_INS_VPSIGNB
+#define UC_X86_INS_VPSIGND QC_X86_INS_VPSIGND
+#define UC_X86_INS_VPSIGNW QC_X86_INS_VPSIGNW
+#define UC_X86_INS_VPSLLDQ QC_X86_INS_VPSLLDQ
+#define UC_X86_INS_VPSLLD QC_X86_INS_VPSLLD
+#define UC_X86_INS_VPSLLQ QC_X86_INS_VPSLLQ
+#define UC_X86_INS_VPSLLVD QC_X86_INS_VPSLLVD
+#define UC_X86_INS_VPSLLVQ QC_X86_INS_VPSLLVQ
+#define UC_X86_INS_VPSLLW QC_X86_INS_VPSLLW
+#define UC_X86_INS_VPSRAD QC_X86_INS_VPSRAD
+#define UC_X86_INS_VPSRAQ QC_X86_INS_VPSRAQ
+#define UC_X86_INS_VPSRAVD QC_X86_INS_VPSRAVD
+#define UC_X86_INS_VPSRAVQ QC_X86_INS_VPSRAVQ
+#define UC_X86_INS_VPSRAW QC_X86_INS_VPSRAW
+#define UC_X86_INS_VPSRLDQ QC_X86_INS_VPSRLDQ
+#define UC_X86_INS_VPSRLD QC_X86_INS_VPSRLD
+#define UC_X86_INS_VPSRLQ QC_X86_INS_VPSRLQ
+#define UC_X86_INS_VPSRLVD QC_X86_INS_VPSRLVD
+#define UC_X86_INS_VPSRLVQ QC_X86_INS_VPSRLVQ
+#define UC_X86_INS_VPSRLW QC_X86_INS_VPSRLW
+#define UC_X86_INS_VPSUBB QC_X86_INS_VPSUBB
+#define UC_X86_INS_VPSUBD QC_X86_INS_VPSUBD
+#define UC_X86_INS_VPSUBQ QC_X86_INS_VPSUBQ
+#define UC_X86_INS_VPSUBSB QC_X86_INS_VPSUBSB
+#define UC_X86_INS_VPSUBSW QC_X86_INS_VPSUBSW
+#define UC_X86_INS_VPSUBUSB QC_X86_INS_VPSUBUSB
+#define UC_X86_INS_VPSUBUSW QC_X86_INS_VPSUBUSW
+#define UC_X86_INS_VPSUBW QC_X86_INS_VPSUBW
+#define UC_X86_INS_VPTESTMD QC_X86_INS_VPTESTMD
+#define UC_X86_INS_VPTESTMQ QC_X86_INS_VPTESTMQ
+#define UC_X86_INS_VPTESTNMD QC_X86_INS_VPTESTNMD
+#define UC_X86_INS_VPTESTNMQ QC_X86_INS_VPTESTNMQ
+#define UC_X86_INS_VPTEST QC_X86_INS_VPTEST
+#define UC_X86_INS_VPUNPCKHBW QC_X86_INS_VPUNPCKHBW
+#define UC_X86_INS_VPUNPCKHDQ QC_X86_INS_VPUNPCKHDQ
+#define UC_X86_INS_VPUNPCKHQDQ QC_X86_INS_VPUNPCKHQDQ
+#define UC_X86_INS_VPUNPCKHWD QC_X86_INS_VPUNPCKHWD
+#define UC_X86_INS_VPUNPCKLBW QC_X86_INS_VPUNPCKLBW
+#define UC_X86_INS_VPUNPCKLDQ QC_X86_INS_VPUNPCKLDQ
+#define UC_X86_INS_VPUNPCKLQDQ QC_X86_INS_VPUNPCKLQDQ
+#define UC_X86_INS_VPUNPCKLWD QC_X86_INS_VPUNPCKLWD
+#define UC_X86_INS_VPXORD QC_X86_INS_VPXORD
+#define UC_X86_INS_VPXORQ QC_X86_INS_VPXORQ
+#define UC_X86_INS_VPXOR QC_X86_INS_VPXOR
+#define UC_X86_INS_VRCP14PD QC_X86_INS_VRCP14PD
+#define UC_X86_INS_VRCP14PS QC_X86_INS_VRCP14PS
+#define UC_X86_INS_VRCP14SD QC_X86_INS_VRCP14SD
+#define UC_X86_INS_VRCP14SS QC_X86_INS_VRCP14SS
+#define UC_X86_INS_VRCP28PD QC_X86_INS_VRCP28PD
+#define UC_X86_INS_VRCP28PS QC_X86_INS_VRCP28PS
+#define UC_X86_INS_VRCP28SD QC_X86_INS_VRCP28SD
+#define UC_X86_INS_VRCP28SS QC_X86_INS_VRCP28SS
+#define UC_X86_INS_VRCPPS QC_X86_INS_VRCPPS
+#define UC_X86_INS_VRCPSS QC_X86_INS_VRCPSS
+#define UC_X86_INS_VRNDSCALEPD QC_X86_INS_VRNDSCALEPD
+#define UC_X86_INS_VRNDSCALEPS QC_X86_INS_VRNDSCALEPS
+#define UC_X86_INS_VRNDSCALESD QC_X86_INS_VRNDSCALESD
+#define UC_X86_INS_VRNDSCALESS QC_X86_INS_VRNDSCALESS
+#define UC_X86_INS_VROUNDPD QC_X86_INS_VROUNDPD
+#define UC_X86_INS_VROUNDPS QC_X86_INS_VROUNDPS
+#define UC_X86_INS_VROUNDSD QC_X86_INS_VROUNDSD
+#define UC_X86_INS_VROUNDSS QC_X86_INS_VROUNDSS
+#define UC_X86_INS_VRSQRT14PD QC_X86_INS_VRSQRT14PD
+#define UC_X86_INS_VRSQRT14PS QC_X86_INS_VRSQRT14PS
+#define UC_X86_INS_VRSQRT14SD QC_X86_INS_VRSQRT14SD
+#define UC_X86_INS_VRSQRT14SS QC_X86_INS_VRSQRT14SS
+#define UC_X86_INS_VRSQRT28PD QC_X86_INS_VRSQRT28PD
+#define UC_X86_INS_VRSQRT28PS QC_X86_INS_VRSQRT28PS
+#define UC_X86_INS_VRSQRT28SD QC_X86_INS_VRSQRT28SD
+#define UC_X86_INS_VRSQRT28SS QC_X86_INS_VRSQRT28SS
+#define UC_X86_INS_VRSQRTPS QC_X86_INS_VRSQRTPS
+#define UC_X86_INS_VRSQRTSS QC_X86_INS_VRSQRTSS
+#define UC_X86_INS_VSCATTERDPD QC_X86_INS_VSCATTERDPD
+#define UC_X86_INS_VSCATTERDPS QC_X86_INS_VSCATTERDPS
+#define UC_X86_INS_VSCATTERPF0DPD QC_X86_INS_VSCATTERPF0DPD
+#define UC_X86_INS_VSCATTERPF0DPS QC_X86_INS_VSCATTERPF0DPS
+#define UC_X86_INS_VSCATTERPF0QPD QC_X86_INS_VSCATTERPF0QPD
+#define UC_X86_INS_VSCATTERPF0QPS QC_X86_INS_VSCATTERPF0QPS
+#define UC_X86_INS_VSCATTERPF1DPD QC_X86_INS_VSCATTERPF1DPD
+#define UC_X86_INS_VSCATTERPF1DPS QC_X86_INS_VSCATTERPF1DPS
+#define UC_X86_INS_VSCATTERPF1QPD QC_X86_INS_VSCATTERPF1QPD
+#define UC_X86_INS_VSCATTERPF1QPS QC_X86_INS_VSCATTERPF1QPS
+#define UC_X86_INS_VSCATTERQPD QC_X86_INS_VSCATTERQPD
+#define UC_X86_INS_VSCATTERQPS QC_X86_INS_VSCATTERQPS
+#define UC_X86_INS_VSHUFPD QC_X86_INS_VSHUFPD
+#define UC_X86_INS_VSHUFPS QC_X86_INS_VSHUFPS
+#define UC_X86_INS_VSQRTPD QC_X86_INS_VSQRTPD
+#define UC_X86_INS_VSQRTPS QC_X86_INS_VSQRTPS
+#define UC_X86_INS_VSQRTSD QC_X86_INS_VSQRTSD
+#define UC_X86_INS_VSQRTSS QC_X86_INS_VSQRTSS
+#define UC_X86_INS_VSTMXCSR QC_X86_INS_VSTMXCSR
+#define UC_X86_INS_VSUBPD QC_X86_INS_VSUBPD
+#define UC_X86_INS_VSUBPS QC_X86_INS_VSUBPS
+#define UC_X86_INS_VSUBSD QC_X86_INS_VSUBSD
+#define UC_X86_INS_VSUBSS QC_X86_INS_VSUBSS
+#define UC_X86_INS_VTESTPD QC_X86_INS_VTESTPD
+#define UC_X86_INS_VTESTPS QC_X86_INS_VTESTPS
+#define UC_X86_INS_VUNPCKHPD QC_X86_INS_VUNPCKHPD
+#define UC_X86_INS_VUNPCKHPS QC_X86_INS_VUNPCKHPS
+#define UC_X86_INS_VUNPCKLPD QC_X86_INS_VUNPCKLPD
+#define UC_X86_INS_VUNPCKLPS QC_X86_INS_VUNPCKLPS
+#define UC_X86_INS_VZEROALL QC_X86_INS_VZEROALL
+#define UC_X86_INS_VZEROUPPER QC_X86_INS_VZEROUPPER
+#define UC_X86_INS_WAIT QC_X86_INS_WAIT
+#define UC_X86_INS_WBINVD QC_X86_INS_WBINVD
+#define UC_X86_INS_WRFSBASE QC_X86_INS_WRFSBASE
+#define UC_X86_INS_WRGSBASE QC_X86_INS_WRGSBASE
+#define UC_X86_INS_WRMSR QC_X86_INS_WRMSR
+#define UC_X86_INS_XABORT QC_X86_INS_XABORT
+#define UC_X86_INS_XACQUIRE QC_X86_INS_XACQUIRE
+#define UC_X86_INS_XBEGIN QC_X86_INS_XBEGIN
+#define UC_X86_INS_XCHG QC_X86_INS_XCHG
+#define UC_X86_INS_XCRYPTCBC QC_X86_INS_XCRYPTCBC
+#define UC_X86_INS_XCRYPTCFB QC_X86_INS_XCRYPTCFB
+#define UC_X86_INS_XCRYPTCTR QC_X86_INS_XCRYPTCTR
+#define UC_X86_INS_XCRYPTECB QC_X86_INS_XCRYPTECB
+#define UC_X86_INS_XCRYPTOFB QC_X86_INS_XCRYPTOFB
+#define UC_X86_INS_XEND QC_X86_INS_XEND
+#define UC_X86_INS_XGETBV QC_X86_INS_XGETBV
+#define UC_X86_INS_XLATB QC_X86_INS_XLATB
+#define UC_X86_INS_XRELEASE QC_X86_INS_XRELEASE
+#define UC_X86_INS_XRSTOR QC_X86_INS_XRSTOR
+#define UC_X86_INS_XRSTOR64 QC_X86_INS_XRSTOR64
+#define UC_X86_INS_XRSTORS QC_X86_INS_XRSTORS
+#define UC_X86_INS_XRSTORS64 QC_X86_INS_XRSTORS64
+#define UC_X86_INS_XSAVE QC_X86_INS_XSAVE
+#define UC_X86_INS_XSAVE64 QC_X86_INS_XSAVE64
+#define UC_X86_INS_XSAVEC QC_X86_INS_XSAVEC
+#define UC_X86_INS_XSAVEC64 QC_X86_INS_XSAVEC64
+#define UC_X86_INS_XSAVEOPT QC_X86_INS_XSAVEOPT
+#define UC_X86_INS_XSAVEOPT64 QC_X86_INS_XSAVEOPT64
+#define UC_X86_INS_XSAVES QC_X86_INS_XSAVES
+#define UC_X86_INS_XSAVES64 QC_X86_INS_XSAVES64
+#define UC_X86_INS_XSETBV QC_X86_INS_XSETBV
+#define UC_X86_INS_XSHA1 QC_X86_INS_XSHA1
+#define UC_X86_INS_XSHA256 QC_X86_INS_XSHA256
+#define UC_X86_INS_XSTORE QC_X86_INS_XSTORE
+#define UC_X86_INS_XTEST QC_X86_INS_XTEST
+#define UC_X86_INS_FDISI8087_NOP QC_X86_INS_FDISI8087_NOP
+#define UC_X86_INS_FENI8087_NOP QC_X86_INS_FENI8087_NOP
+#define UC_X86_INS_ENDING QC_X86_INS_ENDING
+#define UC_CPU_SPARC32_FUJITSU_MB86904 QC_CPU_SPARC32_FUJITSU_MB86904
+#define UC_CPU_SPARC32_FUJITSU_MB86907 QC_CPU_SPARC32_FUJITSU_MB86907
+#define UC_CPU_SPARC32_TI_MICROSPARC_I QC_CPU_SPARC32_TI_MICROSPARC_I
+#define UC_CPU_SPARC32_TI_MICROSPARC_II QC_CPU_SPARC32_TI_MICROSPARC_II
+#define UC_CPU_SPARC32_TI_MICROSPARC_IIEP QC_CPU_SPARC32_TI_MICROSPARC_IIEP
+#define UC_CPU_SPARC32_TI_SUPERSPARC_40 QC_CPU_SPARC32_TI_SUPERSPARC_40
+#define UC_CPU_SPARC32_TI_SUPERSPARC_50 QC_CPU_SPARC32_TI_SUPERSPARC_50
+#define UC_CPU_SPARC32_TI_SUPERSPARC_51 QC_CPU_SPARC32_TI_SUPERSPARC_51
+#define UC_CPU_SPARC32_TI_SUPERSPARC_60 QC_CPU_SPARC32_TI_SUPERSPARC_60
+#define UC_CPU_SPARC32_TI_SUPERSPARC_61 QC_CPU_SPARC32_TI_SUPERSPARC_61
+#define UC_CPU_SPARC32_TI_SUPERSPARC_II QC_CPU_SPARC32_TI_SUPERSPARC_II
+#define UC_CPU_SPARC32_LEON2 QC_CPU_SPARC32_LEON2
+#define UC_CPU_SPARC32_LEON3 QC_CPU_SPARC32_LEON3
+#define UC_CPU_SPARC64_FUJITSU QC_CPU_SPARC64_FUJITSU
+#define UC_CPU_SPARC64_FUJITSU_III QC_CPU_SPARC64_FUJITSU_III
+#define UC_CPU_SPARC64_FUJITSU_IV QC_CPU_SPARC64_FUJITSU_IV
+#define UC_CPU_SPARC64_FUJITSU_V QC_CPU_SPARC64_FUJITSU_V
+#define UC_CPU_SPARC64_TI_ULTRASPARC_I QC_CPU_SPARC64_TI_ULTRASPARC_I
+#define UC_CPU_SPARC64_TI_ULTRASPARC_II QC_CPU_SPARC64_TI_ULTRASPARC_II
+#define UC_CPU_SPARC64_TI_ULTRASPARC_III QC_CPU_SPARC64_TI_ULTRASPARC_III
+#define UC_CPU_SPARC64_TI_ULTRASPARC_IIE QC_CPU_SPARC64_TI_ULTRASPARC_IIE
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_III QC_CPU_SPARC64_SUN_ULTRASPARC_III
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_III_CU                                   \
+    QC_CPU_SPARC64_SUN_ULTRASPARC_III_CU
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_IIII QC_CPU_SPARC64_SUN_ULTRASPARC_IIII
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_IV QC_CPU_SPARC64_SUN_ULTRASPARC_IV
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_IV_PLUS                                  \
+    QC_CPU_SPARC64_SUN_ULTRASPARC_IV_PLUS
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_IIII_PLUS                                \
+    QC_CPU_SPARC64_SUN_ULTRASPARC_IIII_PLUS
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_T1 QC_CPU_SPARC64_SUN_ULTRASPARC_T1
+#define UC_CPU_SPARC64_SUN_ULTRASPARC_T2 QC_CPU_SPARC64_SUN_ULTRASPARC_T2
+#define UC_CPU_SPARC64_NEC_ULTRASPARC_I QC_CPU_SPARC64_NEC_ULTRASPARC_I
+#define UC_SPARC_REG_INVALID QC_SPARC_REG_INVALID
+#define UC_SPARC_REG_F0 QC_SPARC_REG_F0
+#define UC_SPARC_REG_F1 QC_SPARC_REG_F1
+#define UC_SPARC_REG_F2 QC_SPARC_REG_F2
+#define UC_SPARC_REG_F3 QC_SPARC_REG_F3
+#define UC_SPARC_REG_F4 QC_SPARC_REG_F4
+#define UC_SPARC_REG_F5 QC_SPARC_REG_F5
+#define UC_SPARC_REG_F6 QC_SPARC_REG_F6
+#define UC_SPARC_REG_F7 QC_SPARC_REG_F7
+#define UC_SPARC_REG_F8 QC_SPARC_REG_F8
+#define UC_SPARC_REG_F9 QC_SPARC_REG_F9
+#define UC_SPARC_REG_F10 QC_SPARC_REG_F10
+#define UC_SPARC_REG_F11 QC_SPARC_REG_F11
+#define UC_SPARC_REG_F12 QC_SPARC_REG_F12
+#define UC_SPARC_REG_F13 QC_SPARC_REG_F13
+#define UC_SPARC_REG_F14 QC_SPARC_REG_F14
+#define UC_SPARC_REG_F15 QC_SPARC_REG_F15
+#define UC_SPARC_REG_F16 QC_SPARC_REG_F16
+#define UC_SPARC_REG_F17 QC_SPARC_REG_F17
+#define UC_SPARC_REG_F18 QC_SPARC_REG_F18
+#define UC_SPARC_REG_F19 QC_SPARC_REG_F19
+#define UC_SPARC_REG_F20 QC_SPARC_REG_F20
+#define UC_SPARC_REG_F21 QC_SPARC_REG_F21
+#define UC_SPARC_REG_F22 QC_SPARC_REG_F22
+#define UC_SPARC_REG_F23 QC_SPARC_REG_F23
+#define UC_SPARC_REG_F24 QC_SPARC_REG_F24
+#define UC_SPARC_REG_F25 QC_SPARC_REG_F25
+#define UC_SPARC_REG_F26 QC_SPARC_REG_F26
+#define UC_SPARC_REG_F27 QC_SPARC_REG_F27
+#define UC_SPARC_REG_F28 QC_SPARC_REG_F28
+#define UC_SPARC_REG_F29 QC_SPARC_REG_F29
+#define UC_SPARC_REG_F30 QC_SPARC_REG_F30
+#define UC_SPARC_REG_F31 QC_SPARC_REG_F31
+#define UC_SPARC_REG_F32 QC_SPARC_REG_F32
+#define UC_SPARC_REG_F34 QC_SPARC_REG_F34
+#define UC_SPARC_REG_F36 QC_SPARC_REG_F36
+#define UC_SPARC_REG_F38 QC_SPARC_REG_F38
+#define UC_SPARC_REG_F40 QC_SPARC_REG_F40
+#define UC_SPARC_REG_F42 QC_SPARC_REG_F42
+#define UC_SPARC_REG_F44 QC_SPARC_REG_F44
+#define UC_SPARC_REG_F46 QC_SPARC_REG_F46
+#define UC_SPARC_REG_F48 QC_SPARC_REG_F48
+#define UC_SPARC_REG_F50 QC_SPARC_REG_F50
+#define UC_SPARC_REG_F52 QC_SPARC_REG_F52
+#define UC_SPARC_REG_F54 QC_SPARC_REG_F54
+#define UC_SPARC_REG_F56 QC_SPARC_REG_F56
+#define UC_SPARC_REG_F58 QC_SPARC_REG_F58
+#define UC_SPARC_REG_F60 QC_SPARC_REG_F60
+#define UC_SPARC_REG_F62 QC_SPARC_REG_F62
+#define UC_SPARC_REG_FCC0 QC_SPARC_REG_FCC0
+#define UC_SPARC_REG_FCC1 QC_SPARC_REG_FCC1
+#define UC_SPARC_REG_FCC2 QC_SPARC_REG_FCC2
+#define UC_SPARC_REG_FCC3 QC_SPARC_REG_FCC3
+#define UC_SPARC_REG_G0 QC_SPARC_REG_G0
+#define UC_SPARC_REG_G1 QC_SPARC_REG_G1
+#define UC_SPARC_REG_G2 QC_SPARC_REG_G2
+#define UC_SPARC_REG_G3 QC_SPARC_REG_G3
+#define UC_SPARC_REG_G4 QC_SPARC_REG_G4
+#define UC_SPARC_REG_G5 QC_SPARC_REG_G5
+#define UC_SPARC_REG_G6 QC_SPARC_REG_G6
+#define UC_SPARC_REG_G7 QC_SPARC_REG_G7
+#define UC_SPARC_REG_I0 QC_SPARC_REG_I0
+#define UC_SPARC_REG_I1 QC_SPARC_REG_I1
+#define UC_SPARC_REG_I2 QC_SPARC_REG_I2
+#define UC_SPARC_REG_I3 QC_SPARC_REG_I3
+#define UC_SPARC_REG_I4 QC_SPARC_REG_I4
+#define UC_SPARC_REG_I5 QC_SPARC_REG_I5
+#define UC_SPARC_REG_FP QC_SPARC_REG_FP
+#define UC_SPARC_REG_I7 QC_SPARC_REG_I7
+#define UC_SPARC_REG_ICC QC_SPARC_REG_ICC
+#define UC_SPARC_REG_L0 QC_SPARC_REG_L0
+#define UC_SPARC_REG_L1 QC_SPARC_REG_L1
+#define UC_SPARC_REG_L2 QC_SPARC_REG_L2
+#define UC_SPARC_REG_L3 QC_SPARC_REG_L3
+#define UC_SPARC_REG_L4 QC_SPARC_REG_L4
+#define UC_SPARC_REG_L5 QC_SPARC_REG_L5
+#define UC_SPARC_REG_L6 QC_SPARC_REG_L6
+#define UC_SPARC_REG_L7 QC_SPARC_REG_L7
+#define UC_SPARC_REG_O0 QC_SPARC_REG_O0
+#define UC_SPARC_REG_O1 QC_SPARC_REG_O1
+#define UC_SPARC_REG_O2 QC_SPARC_REG_O2
+#define UC_SPARC_REG_O3 QC_SPARC_REG_O3
+#define UC_SPARC_REG_O4 QC_SPARC_REG_O4
+#define UC_SPARC_REG_O5 QC_SPARC_REG_O5
+#define UC_SPARC_REG_SP QC_SPARC_REG_SP
+#define UC_SPARC_REG_O7 QC_SPARC_REG_O7
+#define UC_SPARC_REG_Y QC_SPARC_REG_Y
+#define UC_SPARC_REG_XCC QC_SPARC_REG_XCC
+#define UC_SPARC_REG_PC QC_SPARC_REG_PC
+#define UC_SPARC_REG_ENDING QC_SPARC_REG_ENDING
+#define UC_SPARC_REG_O6 QC_SPARC_REG_O6
+#define UC_SPARC_REG_I6 QC_SPARC_REG_I6
+#define UC_CPU_M5206_CPU QC_CPU_M5206_CPU
+#define UC_CPU_M68000_CPU QC_CPU_M68000_CPU
+#define UC_CPU_M68020_CPU QC_CPU_M68020_CPU
+#define UC_CPU_M68030_CPU QC_CPU_M68030_CPU
+#define UC_CPU_M68040_CPU QC_CPU_M68040_CPU
+#define UC_CPU_M68060_CPU QC_CPU_M68060_CPU
+#define UC_CPU_M5208_CPU QC_CPU_M5208_CPU
+#define UC_CPU_CFV4E_CPU QC_CPU_CFV4E_CPU
+#define UC_CPU_ANY_CPU QC_CPU_ANY_CPU
+#define UC_M68K_REG_INVALID QC_M68K_REG_INVALID
+#define UC_M68K_REG_A0 QC_M68K_REG_A0
+#define UC_M68K_REG_A1 QC_M68K_REG_A1
+#define UC_M68K_REG_A2 QC_M68K_REG_A2
+#define UC_M68K_REG_A3 QC_M68K_REG_A3
+#define UC_M68K_REG_A4 QC_M68K_REG_A4
+#define UC_M68K_REG_A5 QC_M68K_REG_A5
+#define UC_M68K_REG_A6 QC_M68K_REG_A6
+#define UC_M68K_REG_A7 QC_M68K_REG_A7
+#define UC_M68K_REG_D0 QC_M68K_REG_D0
+#define UC_M68K_REG_D1 QC_M68K_REG_D1
+#define UC_M68K_REG_D2 QC_M68K_REG_D2
+#define UC_M68K_REG_D3 QC_M68K_REG_D3
+#define UC_M68K_REG_D4 QC_M68K_REG_D4
+#define UC_M68K_REG_D5 QC_M68K_REG_D5
+#define UC_M68K_REG_D6 QC_M68K_REG_D6
+#define UC_M68K_REG_D7 QC_M68K_REG_D7
+#define UC_M68K_REG_SR QC_M68K_REG_SR
+#define UC_M68K_REG_PC QC_M68K_REG_PC
+#define UC_M68K_REG_ENDING QC_M68K_REG_ENDING
+#define UC_CPU_PPC_401 QC_CPU_PPC_401
+#define UC_CPU_PPC_401A1 QC_CPU_PPC_401A1
+#define UC_CPU_PPC_401B2 QC_CPU_PPC_401B2
+#define UC_CPU_PPC_401C2 QC_CPU_PPC_401C2
+#define UC_CPU_PPC_401D2 QC_CPU_PPC_401D2
+#define UC_CPU_PPC_401E2 QC_CPU_PPC_401E2
+#define UC_CPU_PPC_401F2 QC_CPU_PPC_401F2
+#define UC_CPU_PPC_401G2 QC_CPU_PPC_401G2
+#define UC_CPU_PPC_IOP480 QC_CPU_PPC_IOP480
+#define UC_CPU_PPC_COBRA QC_CPU_PPC_COBRA
+#define UC_CPU_PPC_403GA QC_CPU_PPC_403GA
+#define UC_CPU_PPC_403GB QC_CPU_PPC_403GB
+#define UC_CPU_PPC_403GC QC_CPU_PPC_403GC
+#define UC_CPU_PPC_403GCX QC_CPU_PPC_403GCX
+#define UC_CPU_PPC_405D2 QC_CPU_PPC_405D2
+#define UC_CPU_PPC_405D4 QC_CPU_PPC_405D4
+#define UC_CPU_PPC_405CRA QC_CPU_PPC_405CRA
+#define UC_CPU_PPC_405CRB QC_CPU_PPC_405CRB
+#define UC_CPU_PPC_405CRC QC_CPU_PPC_405CRC
+#define UC_CPU_PPC_405EP QC_CPU_PPC_405EP
+#define UC_CPU_PPC_405EZ QC_CPU_PPC_405EZ
+#define UC_CPU_PPC_405GPA QC_CPU_PPC_405GPA
+#define UC_CPU_PPC_405GPB QC_CPU_PPC_405GPB
+#define UC_CPU_PPC_405GPC QC_CPU_PPC_405GPC
+#define UC_CPU_PPC_405GPD QC_CPU_PPC_405GPD
+#define UC_CPU_PPC_405GPR QC_CPU_PPC_405GPR
+#define UC_CPU_PPC_405LP QC_CPU_PPC_405LP
+#define UC_CPU_PPC_NPE405H QC_CPU_PPC_NPE405H
+#define UC_CPU_PPC_NPE405H2 QC_CPU_PPC_NPE405H2
+#define UC_CPU_PPC_NPE405L QC_CPU_PPC_NPE405L
+#define UC_CPU_PPC_NPE4GS3 QC_CPU_PPC_NPE4GS3
+#define UC_CPU_PPC_STB03 QC_CPU_PPC_STB03
+#define UC_CPU_PPC_STB04 QC_CPU_PPC_STB04
+#define UC_CPU_PPC_STB25 QC_CPU_PPC_STB25
+#define UC_CPU_PPC_X2VP4 QC_CPU_PPC_X2VP4
+#define UC_CPU_PPC_X2VP20 QC_CPU_PPC_X2VP20
+#define UC_CPU_PPC_440_XILINX QC_CPU_PPC_440_XILINX
+#define UC_CPU_PPC_440_XILINX_W_DFPU QC_CPU_PPC_440_XILINX_W_DFPU
+#define UC_CPU_PPC_440EPA QC_CPU_PPC_440EPA
+#define UC_CPU_PPC_440EPB QC_CPU_PPC_440EPB
+#define UC_CPU_PPC_440EPX QC_CPU_PPC_440EPX
+#define UC_CPU_PPC_460EXB QC_CPU_PPC_460EXB
+#define UC_CPU_PPC_G2 QC_CPU_PPC_G2
+#define UC_CPU_PPC_G2H4 QC_CPU_PPC_G2H4
+#define UC_CPU_PPC_G2GP QC_CPU_PPC_G2GP
+#define UC_CPU_PPC_G2LS QC_CPU_PPC_G2LS
+#define UC_CPU_PPC_G2HIP3 QC_CPU_PPC_G2HIP3
+#define UC_CPU_PPC_G2HIP4 QC_CPU_PPC_G2HIP4
+#define UC_CPU_PPC_MPC603 QC_CPU_PPC_MPC603
+#define UC_CPU_PPC_G2LE QC_CPU_PPC_G2LE
+#define UC_CPU_PPC_G2LEGP QC_CPU_PPC_G2LEGP
+#define UC_CPU_PPC_G2LELS QC_CPU_PPC_G2LELS
+#define UC_CPU_PPC_G2LEGP1 QC_CPU_PPC_G2LEGP1
+#define UC_CPU_PPC_G2LEGP3 QC_CPU_PPC_G2LEGP3
+#define UC_CPU_PPC_MPC5200_V10 QC_CPU_PPC_MPC5200_V10
+#define UC_CPU_PPC_MPC5200_V11 QC_CPU_PPC_MPC5200_V11
+#define UC_CPU_PPC_MPC5200_V12 QC_CPU_PPC_MPC5200_V12
+#define UC_CPU_PPC_MPC5200B_V20 QC_CPU_PPC_MPC5200B_V20
+#define UC_CPU_PPC_MPC5200B_V21 QC_CPU_PPC_MPC5200B_V21
+#define UC_CPU_PPC_E200Z5 QC_CPU_PPC_E200Z5
+#define UC_CPU_PPC_E200Z6 QC_CPU_PPC_E200Z6
+#define UC_CPU_PPC_E300C1 QC_CPU_PPC_E300C1
+#define UC_CPU_PPC_E300C2 QC_CPU_PPC_E300C2
+#define UC_CPU_PPC_E300C3 QC_CPU_PPC_E300C3
+#define UC_CPU_PPC_E300C4 QC_CPU_PPC_E300C4
+#define UC_CPU_PPC_MPC8343 QC_CPU_PPC_MPC8343
+#define UC_CPU_PPC_MPC8343A QC_CPU_PPC_MPC8343A
+#define UC_CPU_PPC_MPC8343E QC_CPU_PPC_MPC8343E
+#define UC_CPU_PPC_MPC8343EA QC_CPU_PPC_MPC8343EA
+#define UC_CPU_PPC_MPC8347T QC_CPU_PPC_MPC8347T
+#define UC_CPU_PPC_MPC8347P QC_CPU_PPC_MPC8347P
+#define UC_CPU_PPC_MPC8347AT QC_CPU_PPC_MPC8347AT
+#define UC_CPU_PPC_MPC8347AP QC_CPU_PPC_MPC8347AP
+#define UC_CPU_PPC_MPC8347ET QC_CPU_PPC_MPC8347ET
+#define UC_CPU_PPC_MPC8347EP QC_CPU_PPC_MPC8347EP
+#define UC_CPU_PPC_MPC8347EAT QC_CPU_PPC_MPC8347EAT
+#define UC_CPU_PPC_MPC8347EAP QC_CPU_PPC_MPC8347EAP
+#define UC_CPU_PPC_MPC8349 QC_CPU_PPC_MPC8349
+#define UC_CPU_PPC_MPC8349A QC_CPU_PPC_MPC8349A
+#define UC_CPU_PPC_MPC8349E QC_CPU_PPC_MPC8349E
+#define UC_CPU_PPC_MPC8349EA QC_CPU_PPC_MPC8349EA
+#define UC_CPU_PPC_MPC8377 QC_CPU_PPC_MPC8377
+#define UC_CPU_PPC_MPC8377E QC_CPU_PPC_MPC8377E
+#define UC_CPU_PPC_MPC8378 QC_CPU_PPC_MPC8378
+#define UC_CPU_PPC_MPC8378E QC_CPU_PPC_MPC8378E
+#define UC_CPU_PPC_MPC8379 QC_CPU_PPC_MPC8379
+#define UC_CPU_PPC_MPC8379E QC_CPU_PPC_MPC8379E
+#define UC_CPU_PPC_E500_V10 QC_CPU_PPC_E500_V10
+#define UC_CPU_PPC_E500_V20 QC_CPU_PPC_E500_V20
+#define UC_CPU_PPC_E500V2_V10 QC_CPU_PPC_E500V2_V10
+#define UC_CPU_PPC_E500V2_V20 QC_CPU_PPC_E500V2_V20
+#define UC_CPU_PPC_E500V2_V21 QC_CPU_PPC_E500V2_V21
+#define UC_CPU_PPC_E500V2_V22 QC_CPU_PPC_E500V2_V22
+#define UC_CPU_PPC_E500V2_V30 QC_CPU_PPC_E500V2_V30
+#define UC_CPU_PPC_E500MC QC_CPU_PPC_E500MC
+#define UC_CPU_PPC_MPC8533_V10 QC_CPU_PPC_MPC8533_V10
+#define UC_CPU_PPC_MPC8533_V11 QC_CPU_PPC_MPC8533_V11
+#define UC_CPU_PPC_MPC8533E_V10 QC_CPU_PPC_MPC8533E_V10
+#define UC_CPU_PPC_MPC8533E_V11 QC_CPU_PPC_MPC8533E_V11
+#define UC_CPU_PPC_MPC8540_V10 QC_CPU_PPC_MPC8540_V10
+#define UC_CPU_PPC_MPC8540_V20 QC_CPU_PPC_MPC8540_V20
+#define UC_CPU_PPC_MPC8540_V21 QC_CPU_PPC_MPC8540_V21
+#define UC_CPU_PPC_MPC8541_V10 QC_CPU_PPC_MPC8541_V10
+#define UC_CPU_PPC_MPC8541_V11 QC_CPU_PPC_MPC8541_V11
+#define UC_CPU_PPC_MPC8541E_V10 QC_CPU_PPC_MPC8541E_V10
+#define UC_CPU_PPC_MPC8541E_V11 QC_CPU_PPC_MPC8541E_V11
+#define UC_CPU_PPC_MPC8543_V10 QC_CPU_PPC_MPC8543_V10
+#define UC_CPU_PPC_MPC8543_V11 QC_CPU_PPC_MPC8543_V11
+#define UC_CPU_PPC_MPC8543_V20 QC_CPU_PPC_MPC8543_V20
+#define UC_CPU_PPC_MPC8543_V21 QC_CPU_PPC_MPC8543_V21
+#define UC_CPU_PPC_MPC8543E_V10 QC_CPU_PPC_MPC8543E_V10
+#define UC_CPU_PPC_MPC8543E_V11 QC_CPU_PPC_MPC8543E_V11
+#define UC_CPU_PPC_MPC8543E_V20 QC_CPU_PPC_MPC8543E_V20
+#define UC_CPU_PPC_MPC8543E_V21 QC_CPU_PPC_MPC8543E_V21
+#define UC_CPU_PPC_MPC8544_V10 QC_CPU_PPC_MPC8544_V10
+#define UC_CPU_PPC_MPC8544_V11 QC_CPU_PPC_MPC8544_V11
+#define UC_CPU_PPC_MPC8544E_V10 QC_CPU_PPC_MPC8544E_V10
+#define UC_CPU_PPC_MPC8544E_V11 QC_CPU_PPC_MPC8544E_V11
+#define UC_CPU_PPC_MPC8545_V20 QC_CPU_PPC_MPC8545_V20
+#define UC_CPU_PPC_MPC8545_V21 QC_CPU_PPC_MPC8545_V21
+#define UC_CPU_PPC_MPC8545E_V20 QC_CPU_PPC_MPC8545E_V20
+#define UC_CPU_PPC_MPC8545E_V21 QC_CPU_PPC_MPC8545E_V21
+#define UC_CPU_PPC_MPC8547E_V20 QC_CPU_PPC_MPC8547E_V20
+#define UC_CPU_PPC_MPC8547E_V21 QC_CPU_PPC_MPC8547E_V21
+#define UC_CPU_PPC_MPC8548_V10 QC_CPU_PPC_MPC8548_V10
+#define UC_CPU_PPC_MPC8548_V11 QC_CPU_PPC_MPC8548_V11
+#define UC_CPU_PPC_MPC8548_V20 QC_CPU_PPC_MPC8548_V20
+#define UC_CPU_PPC_MPC8548_V21 QC_CPU_PPC_MPC8548_V21
+#define UC_CPU_PPC_MPC8548E_V10 QC_CPU_PPC_MPC8548E_V10
+#define UC_CPU_PPC_MPC8548E_V11 QC_CPU_PPC_MPC8548E_V11
+#define UC_CPU_PPC_MPC8548E_V20 QC_CPU_PPC_MPC8548E_V20
+#define UC_CPU_PPC_MPC8548E_V21 QC_CPU_PPC_MPC8548E_V21
+#define UC_CPU_PPC_MPC8555_V10 QC_CPU_PPC_MPC8555_V10
+#define UC_CPU_PPC_MPC8555_V11 QC_CPU_PPC_MPC8555_V11
+#define UC_CPU_PPC_MPC8555E_V10 QC_CPU_PPC_MPC8555E_V10
+#define UC_CPU_PPC_MPC8555E_V11 QC_CPU_PPC_MPC8555E_V11
+#define UC_CPU_PPC_MPC8560_V10 QC_CPU_PPC_MPC8560_V10
+#define UC_CPU_PPC_MPC8560_V20 QC_CPU_PPC_MPC8560_V20
+#define UC_CPU_PPC_MPC8560_V21 QC_CPU_PPC_MPC8560_V21
+#define UC_CPU_PPC_MPC8567 QC_CPU_PPC_MPC8567
+#define UC_CPU_PPC_MPC8567E QC_CPU_PPC_MPC8567E
+#define UC_CPU_PPC_MPC8568 QC_CPU_PPC_MPC8568
+#define UC_CPU_PPC_MPC8568E QC_CPU_PPC_MPC8568E
+#define UC_CPU_PPC_MPC8572 QC_CPU_PPC_MPC8572
+#define UC_CPU_PPC_MPC8572E QC_CPU_PPC_MPC8572E
+#define UC_CPU_PPC_E600 QC_CPU_PPC_E600
+#define UC_CPU_PPC_MPC8610 QC_CPU_PPC_MPC8610
+#define UC_CPU_PPC_MPC8641 QC_CPU_PPC_MPC8641
+#define UC_CPU_PPC_MPC8641D QC_CPU_PPC_MPC8641D
+#define UC_CPU_PPC_601_V0 QC_CPU_PPC_601_V0
+#define UC_CPU_PPC_601_V1 QC_CPU_PPC_601_V1
+#define UC_CPU_PPC_601_V2 QC_CPU_PPC_601_V2
+#define UC_CPU_PPC_602 QC_CPU_PPC_602
+#define UC_CPU_PPC_603 QC_CPU_PPC_603
+#define UC_CPU_PPC_603E_V1_1 QC_CPU_PPC_603E_V1_1
+#define UC_CPU_PPC_603E_V1_2 QC_CPU_PPC_603E_V1_2
+#define UC_CPU_PPC_603E_V1_3 QC_CPU_PPC_603E_V1_3
+#define UC_CPU_PPC_603E_V1_4 QC_CPU_PPC_603E_V1_4
+#define UC_CPU_PPC_603E_V2_2 QC_CPU_PPC_603E_V2_2
+#define UC_CPU_PPC_603E_V3 QC_CPU_PPC_603E_V3
+#define UC_CPU_PPC_603E_V4 QC_CPU_PPC_603E_V4
+#define UC_CPU_PPC_603E_V4_1 QC_CPU_PPC_603E_V4_1
+#define UC_CPU_PPC_603E7 QC_CPU_PPC_603E7
+#define UC_CPU_PPC_603E7T QC_CPU_PPC_603E7T
+#define UC_CPU_PPC_603E7V QC_CPU_PPC_603E7V
+#define UC_CPU_PPC_603E7V1 QC_CPU_PPC_603E7V1
+#define UC_CPU_PPC_603E7V2 QC_CPU_PPC_603E7V2
+#define UC_CPU_PPC_603P QC_CPU_PPC_603P
+#define UC_CPU_PPC_604 QC_CPU_PPC_604
+#define UC_CPU_PPC_604E_V1_0 QC_CPU_PPC_604E_V1_0
+#define UC_CPU_PPC_604E_V2_2 QC_CPU_PPC_604E_V2_2
+#define UC_CPU_PPC_604E_V2_4 QC_CPU_PPC_604E_V2_4
+#define UC_CPU_PPC_604R QC_CPU_PPC_604R
+#define UC_CPU_PPC_740_V1_0 QC_CPU_PPC_740_V1_0
+#define UC_CPU_PPC_750_V1_0 QC_CPU_PPC_750_V1_0
+#define UC_CPU_PPC_740_V2_0 QC_CPU_PPC_740_V2_0
+#define UC_CPU_PPC_750_V2_0 QC_CPU_PPC_750_V2_0
+#define UC_CPU_PPC_740_V2_1 QC_CPU_PPC_740_V2_1
+#define UC_CPU_PPC_750_V2_1 QC_CPU_PPC_750_V2_1
+#define UC_CPU_PPC_740_V2_2 QC_CPU_PPC_740_V2_2
+#define UC_CPU_PPC_750_V2_2 QC_CPU_PPC_750_V2_2
+#define UC_CPU_PPC_740_V3_0 QC_CPU_PPC_740_V3_0
+#define UC_CPU_PPC_750_V3_0 QC_CPU_PPC_750_V3_0
+#define UC_CPU_PPC_740_V3_1 QC_CPU_PPC_740_V3_1
+#define UC_CPU_PPC_750_V3_1 QC_CPU_PPC_750_V3_1
+#define UC_CPU_PPC_740E QC_CPU_PPC_740E
+#define UC_CPU_PPC_750E QC_CPU_PPC_750E
+#define UC_CPU_PPC_740P QC_CPU_PPC_740P
+#define UC_CPU_PPC_750P QC_CPU_PPC_750P
+#define UC_CPU_PPC_750CL_V1_0 QC_CPU_PPC_750CL_V1_0
+#define UC_CPU_PPC_750CL_V2_0 QC_CPU_PPC_750CL_V2_0
+#define UC_CPU_PPC_750CX_V1_0 QC_CPU_PPC_750CX_V1_0
+#define UC_CPU_PPC_750CX_V2_0 QC_CPU_PPC_750CX_V2_0
+#define UC_CPU_PPC_750CX_V2_1 QC_CPU_PPC_750CX_V2_1
+#define UC_CPU_PPC_750CX_V2_2 QC_CPU_PPC_750CX_V2_2
+#define UC_CPU_PPC_750CXE_V2_1 QC_CPU_PPC_750CXE_V2_1
+#define UC_CPU_PPC_750CXE_V2_2 QC_CPU_PPC_750CXE_V2_2
+#define UC_CPU_PPC_750CXE_V2_3 QC_CPU_PPC_750CXE_V2_3
+#define UC_CPU_PPC_750CXE_V2_4 QC_CPU_PPC_750CXE_V2_4
+#define UC_CPU_PPC_750CXE_V2_4B QC_CPU_PPC_750CXE_V2_4B
+#define UC_CPU_PPC_750CXE_V3_0 QC_CPU_PPC_750CXE_V3_0
+#define UC_CPU_PPC_750CXE_V3_1 QC_CPU_PPC_750CXE_V3_1
+#define UC_CPU_PPC_750CXE_V3_1B QC_CPU_PPC_750CXE_V3_1B
+#define UC_CPU_PPC_750CXR QC_CPU_PPC_750CXR
+#define UC_CPU_PPC_750FL QC_CPU_PPC_750FL
+#define UC_CPU_PPC_750FX_V1_0 QC_CPU_PPC_750FX_V1_0
+#define UC_CPU_PPC_750FX_V2_0 QC_CPU_PPC_750FX_V2_0
+#define UC_CPU_PPC_750FX_V2_1 QC_CPU_PPC_750FX_V2_1
+#define UC_CPU_PPC_750FX_V2_2 QC_CPU_PPC_750FX_V2_2
+#define UC_CPU_PPC_750FX_V2_3 QC_CPU_PPC_750FX_V2_3
+#define UC_CPU_PPC_750GL QC_CPU_PPC_750GL
+#define UC_CPU_PPC_750GX_V1_0 QC_CPU_PPC_750GX_V1_0
+#define UC_CPU_PPC_750GX_V1_1 QC_CPU_PPC_750GX_V1_1
+#define UC_CPU_PPC_750GX_V1_2 QC_CPU_PPC_750GX_V1_2
+#define UC_CPU_PPC_750L_V2_0 QC_CPU_PPC_750L_V2_0
+#define UC_CPU_PPC_750L_V2_1 QC_CPU_PPC_750L_V2_1
+#define UC_CPU_PPC_750L_V2_2 QC_CPU_PPC_750L_V2_2
+#define UC_CPU_PPC_750L_V3_0 QC_CPU_PPC_750L_V3_0
+#define UC_CPU_PPC_750L_V3_2 QC_CPU_PPC_750L_V3_2
+#define UC_CPU_PPC_745_V1_0 QC_CPU_PPC_745_V1_0
+#define UC_CPU_PPC_755_V1_0 QC_CPU_PPC_755_V1_0
+#define UC_CPU_PPC_745_V1_1 QC_CPU_PPC_745_V1_1
+#define UC_CPU_PPC_755_V1_1 QC_CPU_PPC_755_V1_1
+#define UC_CPU_PPC_745_V2_0 QC_CPU_PPC_745_V2_0
+#define UC_CPU_PPC_755_V2_0 QC_CPU_PPC_755_V2_0
+#define UC_CPU_PPC_745_V2_1 QC_CPU_PPC_745_V2_1
+#define UC_CPU_PPC_755_V2_1 QC_CPU_PPC_755_V2_1
+#define UC_CPU_PPC_745_V2_2 QC_CPU_PPC_745_V2_2
+#define UC_CPU_PPC_755_V2_2 QC_CPU_PPC_755_V2_2
+#define UC_CPU_PPC_745_V2_3 QC_CPU_PPC_745_V2_3
+#define UC_CPU_PPC_755_V2_3 QC_CPU_PPC_755_V2_3
+#define UC_CPU_PPC_745_V2_4 QC_CPU_PPC_745_V2_4
+#define UC_CPU_PPC_755_V2_4 QC_CPU_PPC_755_V2_4
+#define UC_CPU_PPC_745_V2_5 QC_CPU_PPC_745_V2_5
+#define UC_CPU_PPC_755_V2_5 QC_CPU_PPC_755_V2_5
+#define UC_CPU_PPC_745_V2_6 QC_CPU_PPC_745_V2_6
+#define UC_CPU_PPC_755_V2_6 QC_CPU_PPC_755_V2_6
+#define UC_CPU_PPC_745_V2_7 QC_CPU_PPC_745_V2_7
+#define UC_CPU_PPC_755_V2_7 QC_CPU_PPC_755_V2_7
+#define UC_CPU_PPC_745_V2_8 QC_CPU_PPC_745_V2_8
+#define UC_CPU_PPC_755_V2_8 QC_CPU_PPC_755_V2_8
+#define UC_CPU_PPC_7400_V1_0 QC_CPU_PPC_7400_V1_0
+#define UC_CPU_PPC_7400_V1_1 QC_CPU_PPC_7400_V1_1
+#define UC_CPU_PPC_7400_V2_0 QC_CPU_PPC_7400_V2_0
+#define UC_CPU_PPC_7400_V2_1 QC_CPU_PPC_7400_V2_1
+#define UC_CPU_PPC_7400_V2_2 QC_CPU_PPC_7400_V2_2
+#define UC_CPU_PPC_7400_V2_6 QC_CPU_PPC_7400_V2_6
+#define UC_CPU_PPC_7400_V2_7 QC_CPU_PPC_7400_V2_7
+#define UC_CPU_PPC_7400_V2_8 QC_CPU_PPC_7400_V2_8
+#define UC_CPU_PPC_7400_V2_9 QC_CPU_PPC_7400_V2_9
+#define UC_CPU_PPC_7410_V1_0 QC_CPU_PPC_7410_V1_0
+#define UC_CPU_PPC_7410_V1_1 QC_CPU_PPC_7410_V1_1
+#define UC_CPU_PPC_7410_V1_2 QC_CPU_PPC_7410_V1_2
+#define UC_CPU_PPC_7410_V1_3 QC_CPU_PPC_7410_V1_3
+#define UC_CPU_PPC_7410_V1_4 QC_CPU_PPC_7410_V1_4
+#define UC_CPU_PPC_7448_V1_0 QC_CPU_PPC_7448_V1_0
+#define UC_CPU_PPC_7448_V1_1 QC_CPU_PPC_7448_V1_1
+#define UC_CPU_PPC_7448_V2_0 QC_CPU_PPC_7448_V2_0
+#define UC_CPU_PPC_7448_V2_1 QC_CPU_PPC_7448_V2_1
+#define UC_CPU_PPC_7450_V1_0 QC_CPU_PPC_7450_V1_0
+#define UC_CPU_PPC_7450_V1_1 QC_CPU_PPC_7450_V1_1
+#define UC_CPU_PPC_7450_V1_2 QC_CPU_PPC_7450_V1_2
+#define UC_CPU_PPC_7450_V2_0 QC_CPU_PPC_7450_V2_0
+#define UC_CPU_PPC_7450_V2_1 QC_CPU_PPC_7450_V2_1
+#define UC_CPU_PPC_7441_V2_1 QC_CPU_PPC_7441_V2_1
+#define UC_CPU_PPC_7441_V2_3 QC_CPU_PPC_7441_V2_3
+#define UC_CPU_PPC_7451_V2_3 QC_CPU_PPC_7451_V2_3
+#define UC_CPU_PPC_7441_V2_10 QC_CPU_PPC_7441_V2_10
+#define UC_CPU_PPC_7451_V2_10 QC_CPU_PPC_7451_V2_10
+#define UC_CPU_PPC_7445_V1_0 QC_CPU_PPC_7445_V1_0
+#define UC_CPU_PPC_7455_V1_0 QC_CPU_PPC_7455_V1_0
+#define UC_CPU_PPC_7445_V2_1 QC_CPU_PPC_7445_V2_1
+#define UC_CPU_PPC_7455_V2_1 QC_CPU_PPC_7455_V2_1
+#define UC_CPU_PPC_7445_V3_2 QC_CPU_PPC_7445_V3_2
+#define UC_CPU_PPC_7455_V3_2 QC_CPU_PPC_7455_V3_2
+#define UC_CPU_PPC_7445_V3_3 QC_CPU_PPC_7445_V3_3
+#define UC_CPU_PPC_7455_V3_3 QC_CPU_PPC_7455_V3_3
+#define UC_CPU_PPC_7445_V3_4 QC_CPU_PPC_7445_V3_4
+#define UC_CPU_PPC_7455_V3_4 QC_CPU_PPC_7455_V3_4
+#define UC_CPU_PPC_7447_V1_0 QC_CPU_PPC_7447_V1_0
+#define UC_CPU_PPC_7457_V1_0 QC_CPU_PPC_7457_V1_0
+#define UC_CPU_PPC_7447_V1_1 QC_CPU_PPC_7447_V1_1
+#define UC_CPU_PPC_7457_V1_1 QC_CPU_PPC_7457_V1_1
+#define UC_CPU_PPC_7457_V1_2 QC_CPU_PPC_7457_V1_2
+#define UC_CPU_PPC_7447A_V1_0 QC_CPU_PPC_7447A_V1_0
+#define UC_CPU_PPC_7457A_V1_0 QC_CPU_PPC_7457A_V1_0
+#define UC_CPU_PPC_7447A_V1_1 QC_CPU_PPC_7447A_V1_1
+#define UC_CPU_PPC_7457A_V1_1 QC_CPU_PPC_7457A_V1_1
+#define UC_CPU_PPC_7447A_V1_2 QC_CPU_PPC_7447A_V1_2
+#define UC_CPU_PPC_7457A_V1_2 QC_CPU_PPC_7457A_V1_2
+#define UC_CPU_PPC_E5500 QC_CPU_PPC_E5500
+#define UC_CPU_PPC_E6500 QC_CPU_PPC_E6500
+#define UC_CPU_PPC_970_V2_2 QC_CPU_PPC_970_V2_2
+#define UC_CPU_PPC_970FX_V1_0 QC_CPU_PPC_970FX_V1_0
+#define UC_CPU_PPC_970FX_V2_0 QC_CPU_PPC_970FX_V2_0
+#define UC_CPU_PPC_970FX_V2_1 QC_CPU_PPC_970FX_V2_1
+#define UC_CPU_PPC_970FX_V3_0 QC_CPU_PPC_970FX_V3_0
+#define UC_CPU_PPC_970FX_V3_1 QC_CPU_PPC_970FX_V3_1
+#define UC_CPU_PPC_970MP_V1_0 QC_CPU_PPC_970MP_V1_0
+#define UC_CPU_PPC_970MP_V1_1 QC_CPU_PPC_970MP_V1_1
+#define UC_CPU_PPC_POWER5_V2_1 QC_CPU_PPC_POWER5_V2_1
+#define UC_CPU_PPC_POWER7_V2_3 QC_CPU_PPC_POWER7_V2_3
+#define UC_CPU_PPC_POWER7_V2_1 QC_CPU_PPC_POWER7_V2_1
+#define UC_CPU_PPC_POWER8E_V2_1 QC_CPU_PPC_POWER8E_V2_1
+#define UC_CPU_PPC_POWER8_V2_0 QC_CPU_PPC_POWER8_V2_0
+#define UC_CPU_PPC_POWER8NVL_V1_0 QC_CPU_PPC_POWER8NVL_V1_0
+#define UC_CPU_PPC_POWER9_V1_0 QC_CPU_PPC_POWER9_V1_0
+#define UC_CPU_PPC_POWER9_V2_0 QC_CPU_PPC_POWER9_V2_0
+#define UC_CPU_PPC_POWER10_V1_0 QC_CPU_PPC_POWER10_V1_0
+#define UC_PPC_REG_INVALID QC_PPC_REG_INVALID
+#define UC_PPC_REG_PC QC_PPC_REG_PC
+#define UC_PPC_REG_0 QC_PPC_REG_0
+#define UC_PPC_REG_1 QC_PPC_REG_1
+#define UC_PPC_REG_2 QC_PPC_REG_2
+#define UC_PPC_REG_3 QC_PPC_REG_3
+#define UC_PPC_REG_4 QC_PPC_REG_4
+#define UC_PPC_REG_5 QC_PPC_REG_5
+#define UC_PPC_REG_6 QC_PPC_REG_6
+#define UC_PPC_REG_7 QC_PPC_REG_7
+#define UC_PPC_REG_8 QC_PPC_REG_8
+#define UC_PPC_REG_9 QC_PPC_REG_9
+#define UC_PPC_REG_10 QC_PPC_REG_10
+#define UC_PPC_REG_11 QC_PPC_REG_11
+#define UC_PPC_REG_12 QC_PPC_REG_12
+#define UC_PPC_REG_13 QC_PPC_REG_13
+#define UC_PPC_REG_14 QC_PPC_REG_14
+#define UC_PPC_REG_15 QC_PPC_REG_15
+#define UC_PPC_REG_16 QC_PPC_REG_16
+#define UC_PPC_REG_17 QC_PPC_REG_17
+#define UC_PPC_REG_18 QC_PPC_REG_18
+#define UC_PPC_REG_19 QC_PPC_REG_19
+#define UC_PPC_REG_20 QC_PPC_REG_20
+#define UC_PPC_REG_21 QC_PPC_REG_21
+#define UC_PPC_REG_22 QC_PPC_REG_22
+#define UC_PPC_REG_23 QC_PPC_REG_23
+#define UC_PPC_REG_24 QC_PPC_REG_24
+#define UC_PPC_REG_25 QC_PPC_REG_25
+#define UC_PPC_REG_26 QC_PPC_REG_26
+#define UC_PPC_REG_27 QC_PPC_REG_27
+#define UC_PPC_REG_28 QC_PPC_REG_28
+#define UC_PPC_REG_29 QC_PPC_REG_29
+#define UC_PPC_REG_30 QC_PPC_REG_30
+#define UC_PPC_REG_31 QC_PPC_REG_31
+#define UC_CPU_RISCV32_ANY QC_CPU_RISCV32_ANY
+#define UC_CPU_RISCV32_BASE32 QC_CPU_RISCV32_BASE32
+#define UC_CPU_RISCV32_SIFIVE_E31 QC_CPU_RISCV32_SIFIVE_E31
+#define UC_CPU_RISCV32_SIFIVE_U34 QC_CPU_RISCV32_SIFIVE_U34
+#define UC_CPU_RISCV64_ANY QC_CPU_RISCV64_ANY
+#define UC_CPU_RISCV64_BASE64 QC_CPU_RISCV64_BASE64
+#define UC_CPU_RISCV64_SIFIVE_E51 QC_CPU_RISCV64_SIFIVE_E51
+#define UC_CPU_RISCV64_SIFIVE_U54 QC_CPU_RISCV64_SIFIVE_U54
+#define UC_RISCV_REG_INVALID QC_RISCV_REG_INVALID
+#define UC_RISCV_REG_X0 QC_RISCV_REG_X0
+#define UC_RISCV_REG_X1 QC_RISCV_REG_X1
+#define UC_RISCV_REG_X2 QC_RISCV_REG_X2
+#define UC_RISCV_REG_X3 QC_RISCV_REG_X3
+#define UC_RISCV_REG_X4 QC_RISCV_REG_X4
+#define UC_RISCV_REG_X5 QC_RISCV_REG_X5
+#define UC_RISCV_REG_X6 QC_RISCV_REG_X6
+#define UC_RISCV_REG_X7 QC_RISCV_REG_X7
+#define UC_RISCV_REG_X8 QC_RISCV_REG_X8
+#define UC_RISCV_REG_X9 QC_RISCV_REG_X9
+#define UC_RISCV_REG_X10 QC_RISCV_REG_X10
+#define UC_RISCV_REG_X11 QC_RISCV_REG_X11
+#define UC_RISCV_REG_X12 QC_RISCV_REG_X12
+#define UC_RISCV_REG_X13 QC_RISCV_REG_X13
+#define UC_RISCV_REG_X14 QC_RISCV_REG_X14
+#define UC_RISCV_REG_X15 QC_RISCV_REG_X15
+#define UC_RISCV_REG_X16 QC_RISCV_REG_X16
+#define UC_RISCV_REG_X17 QC_RISCV_REG_X17
+#define UC_RISCV_REG_X18 QC_RISCV_REG_X18
+#define UC_RISCV_REG_X19 QC_RISCV_REG_X19
+#define UC_RISCV_REG_X20 QC_RISCV_REG_X20
+#define UC_RISCV_REG_X21 QC_RISCV_REG_X21
+#define UC_RISCV_REG_X22 QC_RISCV_REG_X22
+#define UC_RISCV_REG_X23 QC_RISCV_REG_X23
+#define UC_RISCV_REG_X24 QC_RISCV_REG_X24
+#define UC_RISCV_REG_X25 QC_RISCV_REG_X25
+#define UC_RISCV_REG_X26 QC_RISCV_REG_X26
+#define UC_RISCV_REG_X27 QC_RISCV_REG_X27
+#define UC_RISCV_REG_X28 QC_RISCV_REG_X28
+#define UC_RISCV_REG_X29 QC_RISCV_REG_X29
+#define UC_RISCV_REG_X30 QC_RISCV_REG_X30
+#define UC_RISCV_REG_X31 QC_RISCV_REG_X31
+#define UC_RISCV_REG_F0 QC_RISCV_REG_F0
+#define UC_RISCV_REG_F1 QC_RISCV_REG_F1
+#define UC_RISCV_REG_F2 QC_RISCV_REG_F2
+#define UC_RISCV_REG_F3 QC_RISCV_REG_F3
+#define UC_RISCV_REG_F4 QC_RISCV_REG_F4
+#define UC_RISCV_REG_F5 QC_RISCV_REG_F5
+#define UC_RISCV_REG_F6 QC_RISCV_REG_F6
+#define UC_RISCV_REG_F7 QC_RISCV_REG_F7
+#define UC_RISCV_REG_F8 QC_RISCV_REG_F8
+#define UC_RISCV_REG_F9 QC_RISCV_REG_F9
+#define UC_RISCV_REG_F10 QC_RISCV_REG_F10
+#define UC_RISCV_REG_F11 QC_RISCV_REG_F11
+#define UC_RISCV_REG_F12 QC_RISCV_REG_F12
+#define UC_RISCV_REG_F13 QC_RISCV_REG_F13
+#define UC_RISCV_REG_F14 QC_RISCV_REG_F14
+#define UC_RISCV_REG_F15 QC_RISCV_REG_F15
+#define UC_RISCV_REG_F16 QC_RISCV_REG_F16
+#define UC_RISCV_REG_F17 QC_RISCV_REG_F17
+#define UC_RISCV_REG_F18 QC_RISCV_REG_F18
+#define UC_RISCV_REG_F19 QC_RISCV_REG_F19
+#define UC_RISCV_REG_F20 QC_RISCV_REG_F20
+#define UC_RISCV_REG_F21 QC_RISCV_REG_F21
+#define UC_RISCV_REG_F22 QC_RISCV_REG_F22
+#define UC_RISCV_REG_F23 QC_RISCV_REG_F23
+#define UC_RISCV_REG_F24 QC_RISCV_REG_F24
+#define UC_RISCV_REG_F25 QC_RISCV_REG_F25
+#define UC_RISCV_REG_F26 QC_RISCV_REG_F26
+#define UC_RISCV_REG_F27 QC_RISCV_REG_F27
+#define UC_RISCV_REG_F28 QC_RISCV_REG_F28
+#define UC_RISCV_REG_F29 QC_RISCV_REG_F29
+#define UC_RISCV_REG_F30 QC_RISCV_REG_F30
+#define UC_RISCV_REG_F31 QC_RISCV_REG_F31
+#define UC_RISCV_REG_PC QC_RISCV_REG_PC
+#define UC_RISCV_REG_ENDING QC_RISCV_REG_ENDING
+#define UC_RISCV_REG_ZERO QC_RISCV_REG_ZERO
+#define UC_RISCV_REG_RA QC_RISCV_REG_RA
+#define UC_RISCV_REG_SP QC_RISCV_REG_SP
+#define UC_RISCV_REG_GP QC_RISCV_REG_GP
+#define UC_RISCV_REG_TP QC_RISCV_REG_TP
+#define UC_RISCV_REG_T0 QC_RISCV_REG_T0
+#define UC_RISCV_REG_T1 QC_RISCV_REG_T1
+#define UC_RISCV_REG_T2 QC_RISCV_REG_T2
+#define UC_RISCV_REG_S0 QC_RISCV_REG_S0
+#define UC_RISCV_REG_FP QC_RISCV_REG_FP
+#define UC_RISCV_REG_S1 QC_RISCV_REG_S1
+#define UC_RISCV_REG_A0 QC_RISCV_REG_A0
+#define UC_RISCV_REG_A1 QC_RISCV_REG_A1
+#define UC_RISCV_REG_A2 QC_RISCV_REG_A2
+#define UC_RISCV_REG_A3 QC_RISCV_REG_A3
+#define UC_RISCV_REG_A4 QC_RISCV_REG_A4
+#define UC_RISCV_REG_A5 QC_RISCV_REG_A5
+#define UC_RISCV_REG_A6 QC_RISCV_REG_A6
+#define UC_RISCV_REG_A7 QC_RISCV_REG_A7
+#define UC_RISCV_REG_S2 QC_RISCV_REG_S2
+#define UC_RISCV_REG_S3 QC_RISCV_REG_S3
+#define UC_RISCV_REG_S4 QC_RISCV_REG_S4
+#define UC_RISCV_REG_S5 QC_RISCV_REG_S5
+#define UC_RISCV_REG_S6 QC_RISCV_REG_S6
+#define UC_RISCV_REG_S7 QC_RISCV_REG_S7
+#define UC_RISCV_REG_S8 QC_RISCV_REG_S8
+#define UC_RISCV_REG_S9 QC_RISCV_REG_S9
+#define UC_RISCV_REG_S10 QC_RISCV_REG_S10
+#define UC_RISCV_REG_S11 QC_RISCV_REG_S11
+#define UC_RISCV_REG_T3 QC_RISCV_REG_T3
+#define UC_RISCV_REG_T4 QC_RISCV_REG_T4
+#define UC_RISCV_REG_T5 QC_RISCV_REG_T5
+#define UC_RISCV_REG_T6 QC_RISCV_REG_T6
+#define UC_RISCV_REG_FT0 QC_RISCV_REG_FT0
+#define UC_RISCV_REG_FT1 QC_RISCV_REG_FT1
+#define UC_RISCV_REG_FT2 QC_RISCV_REG_FT2
+#define UC_RISCV_REG_FT3 QC_RISCV_REG_FT3
+#define UC_RISCV_REG_FT4 QC_RISCV_REG_FT4
+#define UC_RISCV_REG_FT5 QC_RISCV_REG_FT5
+#define UC_RISCV_REG_FT6 QC_RISCV_REG_FT6
+#define UC_RISCV_REG_FT7 QC_RISCV_REG_FT7
+#define UC_RISCV_REG_FS0 QC_RISCV_REG_FS0
+#define UC_RISCV_REG_FS1 QC_RISCV_REG_FS1
+#define UC_RISCV_REG_FA0 QC_RISCV_REG_FA0
+#define UC_RISCV_REG_FA1 QC_RISCV_REG_FA1
+#define UC_RISCV_REG_FA2 QC_RISCV_REG_FA2
+#define UC_RISCV_REG_FA3 QC_RISCV_REG_FA3
+#define UC_RISCV_REG_FA4 QC_RISCV_REG_FA4
+#define UC_RISCV_REG_FA5 QC_RISCV_REG_FA5
+#define UC_RISCV_REG_FA6 QC_RISCV_REG_FA6
+#define UC_RISCV_REG_FA7 QC_RISCV_REG_FA7
+#define UC_RISCV_REG_FS2 QC_RISCV_REG_FS2
+#define UC_RISCV_REG_FS3 QC_RISCV_REG_FS3
+#define UC_RISCV_REG_FS4 QC_RISCV_REG_FS4
+#define UC_RISCV_REG_FS5 QC_RISCV_REG_FS5
+#define UC_RISCV_REG_FS6 QC_RISCV_REG_FS6
+#define UC_RISCV_REG_FS7 QC_RISCV_REG_FS7
+#define UC_RISCV_REG_FS8 QC_RISCV_REG_FS8
+#define UC_RISCV_REG_FS9 QC_RISCV_REG_FS9
+#define UC_RISCV_REG_FS10 QC_RISCV_REG_FS10
+#define UC_RISCV_REG_FS11 QC_RISCV_REG_FS11
+#define UC_RISCV_REG_FT8 QC_RISCV_REG_FT8
+#define UC_RISCV_REG_FT9 QC_RISCV_REG_FT9
+#define UC_RISCV_REG_FT10 QC_RISCV_REG_FT10
+#define UC_RISCV_REG_FT11 QC_RISCV_REG_FT11
+#define UC_API_MAJOR QC_API_MAJOR
+#define UC_API_MINOR QC_API_MINOR
+#define UC_VERSION_MAJOR QC_VERSION_MAJOR
+#define UC_VERSION_MINOR QC_VERSION_MINOR
+#define UC_VERSION_EXTRA QC_VERSION_EXTRA
+#define UC_SECOND_SCALE QC_SECOND_SCALE
+#define UC_MILISECOND_SCALE QC_MILISECOND_SCALE
+#define UC_ARCH_ARM QC_ARCH_ARM
+#define UC_ARCH_ARM64 QC_ARCH_ARM64
+#define UC_ARCH_MIPS QC_ARCH_MIPS
+#define UC_ARCH_X86 QC_ARCH_X86
+#define UC_ARCH_PPC QC_ARCH_PPC
+#define UC_ARCH_SPARC QC_ARCH_SPARC
+#define UC_ARCH_M68K QC_ARCH_M68K
+#define UC_ARCH_RISCV QC_ARCH_RISCV
+#define UC_ARCH_MAX QC_ARCH_MAX
+#define UC_MODE_LITTLE_ENDIAN QC_MODE_LITTLE_ENDIAN
+#define UC_MODE_BIG_ENDIAN QC_MODE_BIG_ENDIAN
+#define UC_MODE_ARM QC_MODE_ARM
+#define UC_MODE_THUMB QC_MODE_THUMB
+#define UC_MODE_MCLASS QC_MODE_MCLASS
+#define UC_MODE_V8 QC_MODE_V8
+#define UC_MODE_ARM926 QC_MODE_ARM926
+#define UC_MODE_ARM946 QC_MODE_ARM946
+#define UC_MODE_ARM1176 QC_MODE_ARM1176
+#define UC_MODE_MICRO QC_MODE_MICRO
+#define UC_MODE_MIPS3 QC_MODE_MIPS3
+#define UC_MODE_MIPS32R6 QC_MODE_MIPS32R6
+#define UC_MODE_MIPS32 QC_MODE_MIPS32
+#define UC_MODE_MIPS64 QC_MODE_MIPS64
+#define UC_MODE_16 QC_MODE_16
+#define UC_MODE_32 QC_MODE_32
+#define UC_MODE_64 QC_MODE_64
+#define UC_MODE_PPC32 QC_MODE_PPC32
+#define UC_MODE_PPC64 QC_MODE_PPC64
+#define UC_MODE_QPX QC_MODE_QPX
+#define UC_MODE_SPARC32 QC_MODE_SPARC32
+#define UC_MODE_SPARC64 QC_MODE_SPARC64
+#define UC_MODE_V9 QC_MODE_V9
+#define UC_MODE_RISCV32 QC_MODE_RISCV32
+#define UC_MODE_RISCV64 QC_MODE_RISCV64
+#define UC_ERR_OK QC_ERR_OK
+#define UC_ERR_NOMEM QC_ERR_NOMEM
+#define UC_ERR_ARCH QC_ERR_ARCH
+#define UC_ERR_HANDLE QC_ERR_HANDLE
+#define UC_ERR_MODE QC_ERR_MODE
+#define UC_ERR_VERSION QC_ERR_VERSION
+#define UC_ERR_READ_UNMAPPED QC_ERR_READ_UNMAPPED
+#define UC_ERR_WRITE_UNMAPPED QC_ERR_WRITE_UNMAPPED
+#define UC_ERR_FETCH_UNMAPPED QC_ERR_FETCH_UNMAPPED
+#define UC_ERR_HOOK QC_ERR_HOOK
+#define UC_ERR_INSN_INVALID QC_ERR_INSN_INVALID
+#define UC_ERR_MAP QC_ERR_MAP
+#define UC_ERR_WRITE_PROT QC_ERR_WRITE_PROT
+#define UC_ERR_READ_PROT QC_ERR_READ_PROT
+#define UC_ERR_FETCH_PROT QC_ERR_FETCH_PROT
+#define UC_ERR_ARG QC_ERR_ARG
+#define UC_ERR_READ_UNALIGNED QC_ERR_READ_UNALIGNED
+#define UC_ERR_WRITE_UNALIGNED QC_ERR_WRITE_UNALIGNED
+#define UC_ERR_FETCH_UNALIGNED QC_ERR_FETCH_UNALIGNED
+#define UC_ERR_HOOK_EXIST QC_ERR_HOOK_EXIST
+#define UC_ERR_RESOURCE QC_ERR_RESOURCE
+#define UC_ERR_EXCEPTION QC_ERR_EXCEPTION
+#define UC_MEM_READ QC_MEM_READ
+#define UC_MEM_WRITE QC_MEM_WRITE
+#define UC_MEM_FETCH QC_MEM_FETCH
+#define UC_MEM_READ_UNMAPPED QC_MEM_READ_UNMAPPED
+#define UC_MEM_WRITE_UNMAPPED QC_MEM_WRITE_UNMAPPED
+#define UC_MEM_FETCH_UNMAPPED QC_MEM_FETCH_UNMAPPED
+#define UC_MEM_WRITE_PROT QC_MEM_WRITE_PROT
+#define UC_MEM_READ_PROT QC_MEM_READ_PROT
+#define UC_MEM_FETCH_PROT QC_MEM_FETCH_PROT
+#define UC_MEM_READ_AFTER QC_MEM_READ_AFTER
+#define UC_TCG_OP_SUB QC_TCG_OP_SUB
+#define UC_TCG_OP_FLAG_CMP QC_TCG_OP_FLAG_CMP
+#define UC_TCG_OP_FLAG_DIRECT QC_TCG_OP_FLAG_DIRECT
+#define UC_HOOK_INTR QC_HOOK_INTR
+#define UC_HOOK_INSN QC_HOOK_INSN
+#define UC_HOOK_CODE QC_HOOK_CODE
+#define UC_HOOK_BLOCK QC_HOOK_BLOCK
+#define UC_HOOK_MEM_READ_UNMAPPED QC_HOOK_MEM_READ_UNMAPPED
+#define UC_HOOK_MEM_WRITE_UNMAPPED QC_HOOK_MEM_WRITE_UNMAPPED
+#define UC_HOOK_MEM_FETCH_UNMAPPED QC_HOOK_MEM_FETCH_UNMAPPED
+#define UC_HOOK_MEM_READ_PROT QC_HOOK_MEM_READ_PROT
+#define UC_HOOK_MEM_WRITE_PROT QC_HOOK_MEM_WRITE_PROT
+#define UC_HOOK_MEM_FETCH_PROT QC_HOOK_MEM_FETCH_PROT
+#define UC_HOOK_MEM_READ QC_HOOK_MEM_READ
+#define UC_HOOK_MEM_WRITE QC_HOOK_MEM_WRITE
+#define UC_HOOK_MEM_FETCH QC_HOOK_MEM_FETCH
+#define UC_HOOK_MEM_READ_AFTER QC_HOOK_MEM_READ_AFTER
+#define UC_HOOK_INSN_INVALID QC_HOOK_INSN_INVALID
+#define UC_HOOK_EDGE_GENERATED QC_HOOK_EDGE_GENERATED
+#define UC_HOOK_TCG_OPCODE QC_HOOK_TCG_OPCODE
+#define UC_HOOK_MEM_UNMAPPED QC_HOOK_MEM_UNMAPPED
+#define UC_HOOK_MEM_PROT QC_HOOK_MEM_PROT
+#define UC_HOOK_MEM_READ_INVALID QC_HOOK_MEM_READ_INVALID
+#define UC_HOOK_MEM_WRITE_INVALID QC_HOOK_MEM_WRITE_INVALID
+#define UC_HOOK_MEM_FETCH_INVALID QC_HOOK_MEM_FETCH_INVALID
+#define UC_HOOK_MEM_INVALID QC_HOOK_MEM_INVALID
+#define UC_HOOK_MEM_VALID QC_HOOK_MEM_VALID
+#define UC_QUERY_MODE QC_QUERY_MODE
+#define UC_QUERY_PAGE_SIZE QC_QUERY_PAGE_SIZE
+#define UC_QUERY_ARCH QC_QUERY_ARCH
+#define UC_QUERY_TIMEOUT QC_QUERY_TIMEOUT
+#define UC_CTL_IO_NONE QC_CTL_IO_NONE
+#define UC_CTL_IO_WRITE QC_CTL_IO_WRITE
+#define UC_CTL_IO_READ QC_CTL_IO_READ
+#define UC_CTL_IO_READ_WRITE QC_CTL_IO_READ_WRITE
+#define UC_CTL_CPU_MODEL QC_CTL_CPU_MODEL
+#define UC_CTL_TB_REQUEST_CACHE QC_CTL_TB_REQUEST_CACHE
+#define UC_CTL_TB_REMOVE_CACHE QC_CTL_TB_REMOVE_CACHE
+#define UC_CTL_READ QC_CTL_READ
+#define UC_CTL_WRITE QC_CTL_WRITE
+#define UC_CTL_READ_WRITE QC_CTL_READ_WRITE
+#define UC_PROT_NONE QC_PROT_NONE
+#define UC_PROT_READ QC_PROT_READ
+#define UC_PROT_WRITE QC_PROT_WRITE
+#define UC_PROT_EXEC QC_PROT_EXEC
+#define UC_PROT_ALL QC_PROT_ALL
+
+#define UC_CTL_UC_MODE QC_CTL_QC_MODE
+#define UC_CTL_UC_PAGE_SIZE QC_CTL_QC_PAGE_SIZE
+#define UC_CTL_UC_ARCH QC_CTL_QC_ARCH
+#define UC_CTL_UC_TIMEOUT QC_CTL_QC_TIMEOUT
+#define UC_CTL_UC_USE_EXITS QC_CTL_QC_USE_EXITS
+#define UC_CTL_UC_EXITS_CNT QC_CTL_QC_EXITS_CNT
+#define UC_CTL_UC_EXITS QC_CTL_QC_EXITS
+
+#include "qnicorn/qnicorn.h"
 
 #endif

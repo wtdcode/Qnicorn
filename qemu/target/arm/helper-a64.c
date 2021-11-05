@@ -33,7 +33,7 @@
 #include "tcg/tcg.h"
 #include "fpu/softfloat.h"
 
-#include <uc_priv.h>
+#include <qc_priv.h>
 
 /* C2.4.7 Multiply and divide */
 /* special cases for 0 and LLONG_MIN are mandated by the standard */
@@ -1078,7 +1078,7 @@ void HELPER(dc_zva)(CPUARMState *env, uint64_t vaddr_in)
      * alignment faults or any memory attribute handling).
      */
 
-    struct uc_struct *uc = env->uc;
+    struct qc_struct *uc = env->uc;
     ARMCPU *cpu = env_archcpu(env);
     uint64_t blocklen = 4 << cpu->dcz_blocksize;
     uint64_t vaddr = vaddr_in & ~(blocklen - 1);

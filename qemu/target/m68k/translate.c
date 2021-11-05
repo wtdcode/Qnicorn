@@ -49,7 +49,7 @@
 
 #include "exec/gen-icount.h"
 
-void m68k_tcg_init(struct uc_struct *uc)
+void m68k_tcg_init(struct qc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
     char *p;
@@ -119,7 +119,7 @@ typedef struct DisasContext {
     TCGv release[MAX_TO_RELEASE];
 
     // Unicorn
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 } DisasContext;
 
 static void init_release_array(DisasContext *s)
@@ -6320,20 +6320,20 @@ static bool m68k_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cpu,
 static void m68k_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
-    struct uc_struct *uc = dc->uc;
+    struct qc_struct *uc = dc->uc;
     TCGContext *tcg_ctx = uc->tcg_ctx;
     CPUM68KState *env = cpu->env_ptr;
     uint16_t insn;
 
     // Unicorn: end address tells us to stop emulation
-    if (uc_addr_is_exit(uc, dc->pc)) {
+    if (qc_addr_is_exit(uc, dc->pc)) {
         gen_exception(dc, dc->pc, EXCP_HLT);
         return;
     }
 
     // Unicorn: trace this instruction on request
-    if (HOOK_EXISTS_BOUNDED(uc, UC_HOOK_CODE, dc->pc)) {
-        gen_uc_tracecode(tcg_ctx, 2, UC_HOOK_CODE_IDX, uc, dc->pc);
+    if (HOOK_EXISTS_BOUNDED(uc, QC_HOOK_CODE, dc->pc)) {
+        gen_qc_tracecode(tcg_ctx, 2, QC_HOOK_CODE_IDX, uc, dc->pc);
         // the callback might want to stop emulation immediately
         check_exit_request(tcg_ctx);
     }

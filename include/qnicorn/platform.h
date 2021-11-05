@@ -6,8 +6,8 @@
  This file is to support header files that are missing in MSVC and
  other non-standard compilers.
 */
-#ifndef UNICORN_PLATFORM_H
-#define UNICORN_PLATFORM_H
+#ifndef QNICORN_PLATFORM_H
+#define QNICORN_PLATFORM_H
 
 /*
 These are the various MSVC versions as given by _MSC_VER:
@@ -260,4 +260,4 @@ typedef _W64 signed int ssize_t;
 #endif
 #endif
 
-#endif // UNICORN_PLATFORM_H
+#endif // QNICORN_PLATFORM_H

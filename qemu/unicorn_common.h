@@ -9,8 +9,8 @@
 // This header define common patterns/codes that will be included in all arch-sepcific
 // codes for unicorns purposes.
 
-void vm_start(struct uc_struct*);
-void tcg_exec_init(struct uc_struct *uc, unsigned long tb_size);
+void vm_start(struct qc_struct*);
+void tcg_exec_init(struct qc_struct *uc, unsigned long tb_size);
 
 // return true on success, false on failure
 static inline bool cpu_physical_mem_read(AddressSpace *as, hwaddr addr,
@@ -25,8 +25,8 @@ static inline bool cpu_physical_mem_write(AddressSpace *as, hwaddr addr,
     return cpu_physical_memory_rw(as, addr, (void *)buf, len, 1);
 }
 
-void tb_cleanup(struct uc_struct *uc);
-void free_code_gen_buffer(struct uc_struct *uc);
+void tb_cleanup(struct qc_struct *uc);
+void free_code_gen_buffer(struct qc_struct *uc);
 
 /** Freeing common resources */
 static void release_common(void *t)
@@ -84,14 +84,14 @@ static void release_common(void *t)
 #endif
 }
 
-static inline void target_page_init(struct uc_struct* uc)
+static inline void target_page_init(struct qc_struct* uc)
 {
     uc->target_page_size = TARGET_PAGE_SIZE;
     uc->target_page_align = TARGET_PAGE_SIZE - 1;
 }
 
 void softfloat_init(void);
-static inline void uc_common_init(struct uc_struct* uc)
+static inline void qc_common_init(struct qc_struct* uc)
 {
     uc->write_mem = cpu_physical_mem_write;
     uc->read_mem = cpu_physical_mem_read;

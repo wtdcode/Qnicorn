@@ -22,11 +22,11 @@
 #include "cpu.h"
 #include <exec/exec-all.h>
 
-void arm_cpu_realizefn(struct uc_struct *uc, CPUState *dev);
-void arm_cpu_class_init(struct uc_struct *uc, CPUClass *oc);
+void arm_cpu_realizefn(struct qc_struct *uc, CPUState *dev);
+void arm_cpu_class_init(struct qc_struct *uc, CPUClass *oc);
 void arm_cpu_post_init(CPUState *obj);
-void arm_cpu_initfn(struct uc_struct *uc, CPUState *obj);
-ARMCPU *cpu_arm_init(struct uc_struct *uc);
+void arm_cpu_initfn(struct qc_struct *uc, CPUState *obj);
+ARMCPU *cpu_arm_init(struct qc_struct *uc);
 
 
 static inline void set_feature(CPUARMState *env, int feature)
@@ -34,7 +34,7 @@ static inline void set_feature(CPUARMState *env, int feature)
     env->features |= 1ULL << feature;
 }
 
-static void aarch64_a57_initfn(struct uc_struct *uc, CPUState *obj)
+static void aarch64_a57_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -84,7 +84,7 @@ static void aarch64_a57_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->gic_vprebits = 5;
 }
 
-static void aarch64_a53_initfn(struct uc_struct *uc, CPUState *obj)
+static void aarch64_a53_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -134,7 +134,7 @@ static void aarch64_a53_initfn(struct uc_struct *uc, CPUState *obj)
     cpu->gic_vprebits = 5;
 }
 
-static void aarch64_a72_initfn(struct uc_struct *uc, CPUState *obj)
+static void aarch64_a72_initfn(struct qc_struct *uc, CPUState *obj)
 {
     ARMCPU *cpu = ARM_CPU(obj);
 
@@ -188,7 +188,7 @@ static void aarch64_a72_initfn(struct uc_struct *uc, CPUState *obj)
  * The version of '-cpu max' for qemu-system-arm is defined in cpu.c;
  * this only needs to handle 64 bits.
  */
-static void aarch64_max_initfn(struct uc_struct *uc, CPUState *obj)
+static void aarch64_max_initfn(struct qc_struct *uc, CPUState *obj)
 {
 
     uint64_t t;
@@ -308,7 +308,7 @@ static void aarch64_max_initfn(struct uc_struct *uc, CPUState *obj)
 
 struct ARMCPUInfo {
     const char *name;
-    void (*initfn)(struct uc_struct *uc, CPUState *obj);
+    void (*initfn)(struct qc_struct *uc, CPUState *obj);
 };
 
 static const ARMCPUInfo aarch64_cpus[] = {
@@ -318,7 +318,7 @@ static const ARMCPUInfo aarch64_cpus[] = {
     { .name = "max",                .initfn = aarch64_max_initfn },
 };
 
-ARMCPU *cpu_aarch64_init(struct uc_struct *uc)
+ARMCPU *cpu_aarch64_init(struct qc_struct *uc)
 {
     int i;
     char *cpu_model = "cortex-a72";

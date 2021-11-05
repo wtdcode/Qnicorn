@@ -10,7 +10,7 @@
 #ifndef QEMU_COMMON_H
 #define QEMU_COMMON_H
 
-#include <unicorn/platform.h>
+#include <qnicorn/platform.h>
 
 #define TFR(expr) do { if ((expr) != -1) break; } while (errno == EINTR)
 
@@ -52,8 +52,8 @@ void *qemu_oom_check(void *ptr);
     sendto(sockfd, buf, len, flags, destaddr, addrlen)
 #endif
 
-struct uc_struct;
-void cpu_exec_init_all(struct uc_struct *uc);
+struct qc_struct;
+void cpu_exec_init_all(struct qc_struct *uc);
 
 /**
  * set_preferred_target_page_bits:
@@ -65,17 +65,17 @@ void cpu_exec_init_all(struct uc_struct *uc);
  * if this is called after the system has already finalized its
  * choice of page size and the requested page size is smaller than that).
  */
-bool set_preferred_target_page_bits(struct uc_struct *uc, int bits);
+bool set_preferred_target_page_bits(struct qc_struct *uc, int bits);
 
 /**
  * finalize_target_page_bits:
  * Commit the final value set by set_preferred_target_page_bits.
  */
-void finalize_target_page_bits(struct uc_struct *uc);
+void finalize_target_page_bits(struct qc_struct *uc);
 
 /* OS specific functions */
 void os_setup_early_signal_handling(void);
 
-void page_size_init(struct uc_struct *uc);
+void page_size_init(struct qc_struct *uc);
 
 #endif

@@ -1,0 +1,168 @@
+/* Unicorn Emulator Engine */
+/* By Nguyen Anh Quynh <aquynh@gmail.com>, 2014-2017 */
+/* This file is released under LGPL2.
+   See COPYING.LGPL2 in root directory for more details
+*/
+
+#ifndef QNICORN_SPARC_H
+#define QNICORN_SPARC_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// GCC SPARC toolchain has a default macro called "sparc" which breaks
+// compilation
+#undef sparc
+
+#ifdef _MSC_VER
+#pragma warning(disable : 4201)
+#endif
+
+//> SPARC32 CPU
+typedef enum qc_cpu_sparc32 {
+    QC_CPU_SPARC32_FUJITSU_MB86904 = 0,
+    QC_CPU_SPARC32_FUJITSU_MB86907,
+    QC_CPU_SPARC32_TI_MICROSPARC_I,
+    QC_CPU_SPARC32_TI_MICROSPARC_II,
+    QC_CPU_SPARC32_TI_MICROSPARC_IIEP,
+    QC_CPU_SPARC32_TI_SUPERSPARC_40,
+    QC_CPU_SPARC32_TI_SUPERSPARC_50,
+    QC_CPU_SPARC32_TI_SUPERSPARC_51,
+    QC_CPU_SPARC32_TI_SUPERSPARC_60,
+    QC_CPU_SPARC32_TI_SUPERSPARC_61,
+    QC_CPU_SPARC32_TI_SUPERSPARC_II,
+    QC_CPU_SPARC32_LEON2,
+    QC_CPU_SPARC32_LEON3
+} qc_cpu_sparc32;
+
+//> SPARC64 CPU
+typedef enum qc_cpu_sparc64 {
+    QC_CPU_SPARC64_FUJITSU = 0,
+    QC_CPU_SPARC64_FUJITSU_III,
+    QC_CPU_SPARC64_FUJITSU_IV,
+    QC_CPU_SPARC64_FUJITSU_V,
+    QC_CPU_SPARC64_TI_ULTRASPARC_I,
+    QC_CPU_SPARC64_TI_ULTRASPARC_II,
+    QC_CPU_SPARC64_TI_ULTRASPARC_III,
+    QC_CPU_SPARC64_TI_ULTRASPARC_IIE,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_III,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_III_CU,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_IIII,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_IV,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_IV_PLUS,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_IIII_PLUS,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_T1,
+    QC_CPU_SPARC64_SUN_ULTRASPARC_T2,
+    QC_CPU_SPARC64_NEC_ULTRASPARC_I,
+} qc_cpu_sparc64;
+
+//> SPARC registers
+typedef enum qc_sparc_reg {
+    QC_SPARC_REG_INVALID = 0,
+
+    QC_SPARC_REG_F0,
+    QC_SPARC_REG_F1,
+    QC_SPARC_REG_F2,
+    QC_SPARC_REG_F3,
+    QC_SPARC_REG_F4,
+    QC_SPARC_REG_F5,
+    QC_SPARC_REG_F6,
+    QC_SPARC_REG_F7,
+    QC_SPARC_REG_F8,
+    QC_SPARC_REG_F9,
+    QC_SPARC_REG_F10,
+    QC_SPARC_REG_F11,
+    QC_SPARC_REG_F12,
+    QC_SPARC_REG_F13,
+    QC_SPARC_REG_F14,
+    QC_SPARC_REG_F15,
+    QC_SPARC_REG_F16,
+    QC_SPARC_REG_F17,
+    QC_SPARC_REG_F18,
+    QC_SPARC_REG_F19,
+    QC_SPARC_REG_F20,
+    QC_SPARC_REG_F21,
+    QC_SPARC_REG_F22,
+    QC_SPARC_REG_F23,
+    QC_SPARC_REG_F24,
+    QC_SPARC_REG_F25,
+    QC_SPARC_REG_F26,
+    QC_SPARC_REG_F27,
+    QC_SPARC_REG_F28,
+    QC_SPARC_REG_F29,
+    QC_SPARC_REG_F30,
+    QC_SPARC_REG_F31,
+    QC_SPARC_REG_F32,
+    QC_SPARC_REG_F34,
+    QC_SPARC_REG_F36,
+    QC_SPARC_REG_F38,
+    QC_SPARC_REG_F40,
+    QC_SPARC_REG_F42,
+    QC_SPARC_REG_F44,
+    QC_SPARC_REG_F46,
+    QC_SPARC_REG_F48,
+    QC_SPARC_REG_F50,
+    QC_SPARC_REG_F52,
+    QC_SPARC_REG_F54,
+    QC_SPARC_REG_F56,
+    QC_SPARC_REG_F58,
+    QC_SPARC_REG_F60,
+    QC_SPARC_REG_F62,
+    QC_SPARC_REG_FCC0, // Floating condition codes
+    QC_SPARC_REG_FCC1,
+    QC_SPARC_REG_FCC2,
+    QC_SPARC_REG_FCC3,
+    QC_SPARC_REG_G0,
+    QC_SPARC_REG_G1,
+    QC_SPARC_REG_G2,
+    QC_SPARC_REG_G3,
+    QC_SPARC_REG_G4,
+    QC_SPARC_REG_G5,
+    QC_SPARC_REG_G6,
+    QC_SPARC_REG_G7,
+    QC_SPARC_REG_I0,
+    QC_SPARC_REG_I1,
+    QC_SPARC_REG_I2,
+    QC_SPARC_REG_I3,
+    QC_SPARC_REG_I4,
+    QC_SPARC_REG_I5,
+    QC_SPARC_REG_FP,
+    QC_SPARC_REG_I7,
+    QC_SPARC_REG_ICC, // Integer condition codes
+    QC_SPARC_REG_L0,
+    QC_SPARC_REG_L1,
+    QC_SPARC_REG_L2,
+    QC_SPARC_REG_L3,
+    QC_SPARC_REG_L4,
+    QC_SPARC_REG_L5,
+    QC_SPARC_REG_L6,
+    QC_SPARC_REG_L7,
+    QC_SPARC_REG_O0,
+    QC_SPARC_REG_O1,
+    QC_SPARC_REG_O2,
+    QC_SPARC_REG_O3,
+    QC_SPARC_REG_O4,
+    QC_SPARC_REG_O5,
+    QC_SPARC_REG_SP,
+    QC_SPARC_REG_O7,
+    QC_SPARC_REG_Y,
+
+    // special register
+    QC_SPARC_REG_XCC,
+
+    // pseudo register
+    QC_SPARC_REG_PC, // program counter register
+
+    QC_SPARC_REG_ENDING, // <-- mark the end of the list of registers
+
+    // extras
+    QC_SPARC_REG_O6 = QC_SPARC_REG_SP,
+    QC_SPARC_REG_I6 = QC_SPARC_REG_FP,
+} qc_sparc_reg;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -1121,7 +1121,7 @@ struct CPUMIPSState {
     target_ulong exception_base; /* ExceptionBase input to the core */
 
     // Unicorn engine
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 };
 
 /**

@@ -4,7 +4,7 @@
 #include "exec/translator.h"
 #include "internals.h"
 
-struct uc_struct;
+struct qc_struct;
 
 /* internal defines */
 typedef struct DisasContext {
@@ -96,7 +96,7 @@ typedef struct DisasContext {
     TCGv_i64 tmp_a64[TMP_A64_MAX];
 
     // Unicorn
-    struct uc_struct *uc;
+    struct qc_struct *uc;
 } DisasContext;
 
 typedef struct DisasCompare {
@@ -170,11 +170,11 @@ static inline void disas_set_insn_syndrome(DisasContext *s, uint32_t syn)
 #define DISAS_EXIT      DISAS_TARGET_9
 
 #ifdef TARGET_AARCH64
-void a64_translate_init(struct uc_struct *uc);
+void a64_translate_init(struct qc_struct *uc);
 void gen_a64_set_pc_im(TCGContext *tcg_ctx, uint64_t val);
 extern const TranslatorOps aarch64_translator_ops;
 #else
-static inline void a64_translate_init(struct uc_struct *uc)
+static inline void a64_translate_init(struct qc_struct *uc)
 {
 }
 

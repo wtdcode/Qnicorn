@@ -11,7 +11,7 @@
 #include "fpu/softfloat-helpers.h"
 #include "cpu.h"
 
-struct uc_struct;
+struct qc_struct;
 
 /*
  * MMU types, the first four entries have the same layout as the
@@ -193,7 +193,7 @@ static inline bool cpu_mips_hw_interrupts_pending(CPUMIPSState *env)
     return r;
 }
 
-void mips_tcg_init(struct uc_struct *uc);
+void mips_tcg_init(struct qc_struct *uc);
 
 /* TODO QOM'ify CPU reset and remove */
 void cpu_state_reset(CPUMIPSState *s);
