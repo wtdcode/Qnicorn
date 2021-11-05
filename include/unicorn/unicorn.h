@@ -14,7 +14,7 @@ extern "C" {
 #include "platform.h"
 #include <stdarg.h>
 
-#if defined(UNICORN_HAS_OSXKERNEL)
+#if defined(QNICORN_HAS_OSXKERNEL)
 #include <libkern/libkern.h>
 #else
 #include <stdlib.h>

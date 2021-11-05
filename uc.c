@@ -2,7 +2,7 @@
 /* By Nguyen Anh Quynh <aquynh@gmail.com>, 2015 */
 /* Modified for Unicorn Engine by Chen Huitao<chenhuitao@hfmrit.com>, 2020 */
 
-#if defined(UNICORN_HAS_OSXKERNEL)
+#if defined(QNICORN_HAS_OSXKERNEL)
 #include <libkern/libkern.h>
 #else
 #include <stddef.h>
@@ -99,35 +99,35 @@ UNICORN_EXPORT
 bool uc_arch_supported(uc_arch arch)
 {
     switch (arch) {
-#ifdef UNICORN_HAS_ARM
+#ifdef QNICORN_HAS_ARM
     case UC_ARCH_ARM:
         return true;
 #endif
-#ifdef UNICORN_HAS_ARM64
+#ifdef QNICORN_HAS_ARM64
     case UC_ARCH_ARM64:
         return true;
 #endif
-#ifdef UNICORN_HAS_M68K
+#ifdef QNICORN_HAS_M68K
     case UC_ARCH_M68K:
         return true;
 #endif
-#ifdef UNICORN_HAS_MIPS
+#ifdef QNICORN_HAS_MIPS
     case UC_ARCH_MIPS:
         return true;
 #endif
-#ifdef UNICORN_HAS_PPC
+#ifdef QNICORN_HAS_PPC
     case UC_ARCH_PPC:
         return true;
 #endif
-#ifdef UNICORN_HAS_SPARC
+#ifdef QNICORN_HAS_SPARC
     case UC_ARCH_SPARC:
         return true;
 #endif
-#ifdef UNICORN_HAS_X86
+#ifdef QNICORN_HAS_X86
     case UC_ARCH_X86:
         return true;
 #endif
-#ifdef UNICORN_HAS_RISCV
+#ifdef QNICORN_HAS_RISCV
     case UC_ARCH_RISCV:
         return true;
 #endif
@@ -212,7 +212,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
         switch (arch) {
         default:
             break;
-#ifdef UNICORN_HAS_M68K
+#ifdef QNICORN_HAS_M68K
         case UC_ARCH_M68K:
             if ((mode & ~UC_MODE_M68K_MASK) || !(mode & UC_MODE_BIG_ENDIAN)) {
                 free(uc);
@@ -221,7 +221,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             uc->init_arch = m68k_uc_init;
             break;
 #endif
-#ifdef UNICORN_HAS_X86
+#ifdef QNICORN_HAS_X86
         case UC_ARCH_X86:
             if ((mode & ~UC_MODE_X86_MASK) || (mode & UC_MODE_BIG_ENDIAN) ||
                 !(mode & (UC_MODE_16 | UC_MODE_32 | UC_MODE_64))) {
@@ -231,7 +231,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             uc->init_arch = x86_uc_init;
             break;
 #endif
-#ifdef UNICORN_HAS_ARM
+#ifdef QNICORN_HAS_ARM
         case UC_ARCH_ARM:
             if ((mode & ~UC_MODE_ARM_MASK)) {
                 free(uc);
@@ -248,7 +248,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             }
             break;
 #endif
-#ifdef UNICORN_HAS_ARM64
+#ifdef QNICORN_HAS_ARM64
         case UC_ARCH_ARM64:
             if (mode & ~UC_MODE_ARM_MASK) {
                 free(uc);
@@ -262,8 +262,8 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             break;
 #endif
 
-#if defined(UNICORN_HAS_MIPS) || defined(UNICORN_HAS_MIPSEL) ||                \
-    defined(UNICORN_HAS_MIPS64) || defined(UNICORN_HAS_MIPS64EL)
+#if defined(QNICORN_HAS_MIPS) || defined(QNICORN_HAS_MIPSEL) ||                \
+    defined(QNICORN_HAS_MIPS64) || defined(QNICORN_HAS_MIPS64EL)
         case UC_ARCH_MIPS:
             if ((mode & ~UC_MODE_MIPS_MASK) ||
                 !(mode & (UC_MODE_MIPS32 | UC_MODE_MIPS64))) {
@@ -271,23 +271,23 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
                 return UC_ERR_MODE;
             }
             if (mode & UC_MODE_BIG_ENDIAN) {
-#ifdef UNICORN_HAS_MIPS
+#ifdef QNICORN_HAS_MIPS
                 if (mode & UC_MODE_MIPS32) {
                     uc->init_arch = mips_uc_init;
                 }
 #endif
-#ifdef UNICORN_HAS_MIPS64
+#ifdef QNICORN_HAS_MIPS64
                 if (mode & UC_MODE_MIPS64) {
                     uc->init_arch = mips64_uc_init;
                 }
 #endif
             } else { // little endian
-#ifdef UNICORN_HAS_MIPSEL
+#ifdef QNICORN_HAS_MIPSEL
                 if (mode & UC_MODE_MIPS32) {
                     uc->init_arch = mipsel_uc_init;
                 }
 #endif
-#ifdef UNICORN_HAS_MIPS64EL
+#ifdef QNICORN_HAS_MIPS64EL
                 if (mode & UC_MODE_MIPS64) {
                     uc->init_arch = mips64el_uc_init;
                 }
@@ -296,7 +296,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             break;
 #endif
 
-#ifdef UNICORN_HAS_SPARC
+#ifdef QNICORN_HAS_SPARC
         case UC_ARCH_SPARC:
             if ((mode & ~UC_MODE_SPARC_MASK) || !(mode & UC_MODE_BIG_ENDIAN) ||
                 !(mode & (UC_MODE_SPARC32 | UC_MODE_SPARC64))) {
@@ -310,7 +310,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             }
             break;
 #endif
-#ifdef UNICORN_HAS_PPC
+#ifdef QNICORN_HAS_PPC
         case UC_ARCH_PPC:
             if ((mode & ~UC_MODE_PPC_MASK) || !(mode & UC_MODE_BIG_ENDIAN) ||
                 !(mode & (UC_MODE_PPC32 | UC_MODE_PPC64))) {
@@ -324,7 +324,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
             }
             break;
 #endif
-#ifdef UNICORN_HAS_RISCV
+#ifdef QNICORN_HAS_RISCV
         case UC_ARCH_RISCV:
             if ((mode & ~UC_MODE_RISCV_MASK) ||
                 !(mode & (UC_MODE_RISCV32 | UC_MODE_RISCV64))) {
@@ -703,12 +703,12 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
     switch (uc->arch) {
     default:
         break;
-#ifdef UNICORN_HAS_M68K
+#ifdef QNICORN_HAS_M68K
     case UC_ARCH_M68K:
         uc_reg_write(uc, UC_M68K_REG_PC, &begin);
         break;
 #endif
-#ifdef UNICORN_HAS_X86
+#ifdef QNICORN_HAS_X86
     case UC_ARCH_X86:
         switch (uc->mode) {
         default:
@@ -732,34 +732,34 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
         }
         break;
 #endif
-#ifdef UNICORN_HAS_ARM
+#ifdef QNICORN_HAS_ARM
     case UC_ARCH_ARM:
         uc_reg_write(uc, UC_ARM_REG_R15, &begin);
         break;
 #endif
-#ifdef UNICORN_HAS_ARM64
+#ifdef QNICORN_HAS_ARM64
     case UC_ARCH_ARM64:
         uc_reg_write(uc, UC_ARM64_REG_PC, &begin);
         break;
 #endif
-#ifdef UNICORN_HAS_MIPS
+#ifdef QNICORN_HAS_MIPS
     case UC_ARCH_MIPS:
         // TODO: MIPS32/MIPS64/BIGENDIAN etc
         uc_reg_write(uc, UC_MIPS_REG_PC, &begin);
         break;
 #endif
-#ifdef UNICORN_HAS_SPARC
+#ifdef QNICORN_HAS_SPARC
     case UC_ARCH_SPARC:
         // TODO: Sparc/Sparc64
         uc_reg_write(uc, UC_SPARC_REG_PC, &begin);
         break;
 #endif
-#ifdef UNICORN_HAS_PPC
+#ifdef QNICORN_HAS_PPC
     case UC_ARCH_PPC:
         uc_reg_write(uc, UC_PPC_REG_PC, &begin);
         break;
 #endif
-#ifdef UNICORN_HAS_RISCV
+#ifdef QNICORN_HAS_RISCV
     case UC_ARCH_RISCV:
         uc_reg_write(uc, UC_RISCV_REG_PC, &begin);
         break;
@@ -1654,7 +1654,7 @@ uc_err uc_query(uc_engine *uc, uc_query_type type, size_t *result)
         break;
 
     case UC_QUERY_MODE:
-#ifdef UNICORN_HAS_ARM
+#ifdef QNICORN_HAS_ARM
         if (uc->arch == UC_ARCH_ARM) {
             return uc->query(uc, type, result);
         }
@@ -1745,19 +1745,19 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
         rw->context_reg_read = NULL;
         rw->context_reg_write = NULL;
         break;
-#ifdef UNICORN_HAS_M68K
+#ifdef QNICORN_HAS_M68K
     case UC_ARCH_M68K:
         rw->context_reg_read = m68k_context_reg_read;
         rw->context_reg_write = m68k_context_reg_write;
         break;
 #endif
-#ifdef UNICORN_HAS_X86
+#ifdef QNICORN_HAS_X86
     case UC_ARCH_X86:
         rw->context_reg_read = x86_context_reg_read;
         rw->context_reg_write = x86_context_reg_write;
         break;
 #endif
-#ifdef UNICORN_HAS_ARM
+#ifdef QNICORN_HAS_ARM
     case UC_ARCH_ARM:
         if (mode & UC_MODE_BIG_ENDIAN) {
             rw->context_reg_read = armeb_context_reg_read;
@@ -1767,7 +1767,7 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
             rw->context_reg_write = arm_context_reg_write;
         }
 #endif
-#ifdef UNICORN_HAS_ARM64
+#ifdef QNICORN_HAS_ARM64
     case UC_ARCH_ARM64:
         if (mode & UC_MODE_BIG_ENDIAN) {
             rw->context_reg_read = arm64eb_context_reg_read;
@@ -1779,30 +1779,30 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
         break;
 #endif
 
-#if defined(UNICORN_HAS_MIPS) || defined(UNICORN_HAS_MIPSEL) ||                \
-    defined(UNICORN_HAS_MIPS64) || defined(UNICORN_HAS_MIPS64EL)
+#if defined(QNICORN_HAS_MIPS) || defined(QNICORN_HAS_MIPSEL) ||                \
+    defined(QNICORN_HAS_MIPS64) || defined(QNICORN_HAS_MIPS64EL)
     case UC_ARCH_MIPS:
         if (mode & UC_MODE_BIG_ENDIAN) {
-#ifdef UNICORN_HAS_MIPS
+#ifdef QNICORN_HAS_MIPS
             if (mode & UC_MODE_MIPS32) {
                 rw->context_reg_read = mips_context_reg_read;
                 rw->context_reg_write = mips_context_reg_write;
             }
 #endif
-#ifdef UNICORN_HAS_MIPS64
+#ifdef QNICORN_HAS_MIPS64
             if (mode & UC_MODE_MIPS64) {
                 rw->context_reg_read = mips64_context_reg_read;
                 rw->context_reg_write = mips64_context_reg_write;
             }
 #endif
         } else { // little endian
-#ifdef UNICORN_HAS_MIPSEL
+#ifdef QNICORN_HAS_MIPSEL
             if (mode & UC_MODE_MIPS32) {
                 rw->context_reg_read = mipsel_context_reg_read;
                 rw->context_reg_write = mipsel_context_reg_write;
             }
 #endif
-#ifdef UNICORN_HAS_MIPS64EL
+#ifdef QNICORN_HAS_MIPS64EL
             if (mode & UC_MODE_MIPS64) {
                 rw->context_reg_read = mips64el_context_reg_read;
                 rw->context_reg_write = mips64el_context_reg_write;
@@ -1812,7 +1812,7 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
         break;
 #endif
 
-#ifdef UNICORN_HAS_SPARC
+#ifdef QNICORN_HAS_SPARC
     case UC_ARCH_SPARC:
         if (mode & UC_MODE_SPARC64) {
             rw->context_reg_read = sparc64_context_reg_read;
@@ -1823,7 +1823,7 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
         }
         break;
 #endif
-#ifdef UNICORN_HAS_PPC
+#ifdef QNICORN_HAS_PPC
     case UC_ARCH_PPC:
         if (mode & UC_MODE_PPC64) {
             rw->context_reg_read = ppc64_context_reg_read;
@@ -1834,7 +1834,7 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
         }
         break;
 #endif
-#ifdef UNICORN_HAS_RISCV
+#ifdef QNICORN_HAS_RISCV
     case UC_ARCH_RISCV:
         if (mode & UC_MODE_RISCV32) {
             rw->context_reg_read = riscv32_context_reg_read;
